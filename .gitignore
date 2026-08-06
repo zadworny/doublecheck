@@ -16,6 +16,11 @@ dist/
 !.env.example
 .stellar/
 
+# Loose documents dropped in the working copy. This is a public repo and
+# `git add -A` will happily sweep up anything sitting at the root, so keep
+# stray PDFs out by default. Documentation lives in docs/ and is not affected.
+/*.pdf
+
 # OS / editors
 .DS_Store
 .idea/
