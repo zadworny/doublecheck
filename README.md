@@ -15,6 +15,7 @@ no crypto knowledge on the reader's side.
 |---|---|
 | [`SC/`](SC/) | Soroban smart contract (Rust) — the registry itself |
 | [`FE/`](FE/) | React + Vite explorer — the public verifier |
+| [`docs/`](docs/) | design rationale and deployment |
 
 ## How it works
 
@@ -33,19 +34,40 @@ with no cron job.
 |---|---|
 | Contract | `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP` |
 | Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) |
+| Seeded with | 5 entities, 8 claims — covering company-confirmed, self-asserted, withdrawn and expired |
+
+## Run it
+
+The explorer needs no configuration and no wallet — it reads the deployed testnet contract out of
+the box:
+
+```bash
+cd FE && npm install && npm run dev
+```
+
+The contract needs the [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/install-cli)
+(`brew install stellar-cli`):
+
+```bash
+cd SC && cargo test
+```
 
 ## Start here
 
-- **[`SC/docs/verified-registry-report.md`](SC/docs/verified-registry-report.md)** — scope, what
-  stays off-chain, the personal-data decision, and how Stellar changes the original Base-based plan.
+- **[`docs/design-report.md`](docs/design-report.md)** — scope, what stays off-chain, the
+  personal-data decision, and how Stellar changes the chain the original plan named.
 - **[`SC/README.md`](SC/README.md)** — build, test, deploy, and a full CLI walkthrough of the trust
   loop.
-- **[`FE/README.md`](FE/README.md)** — running the explorer against the deployed contract.
+- **[`FE/README.md`](FE/README.md)** — running the explorer, how the data gets from chain to screen,
+  and regenerating the contract bindings.
+- **[`docs/deployment.md`](docs/deployment.md)** — putting the explorer on Vercel and the contract on
+  Stellar, plus what to watch once it is live.
 
 ## Status
 
 MVP. The contract implements the trust loop end to end with 28 passing tests and is deployed to
-testnet. It has not been audited. See §10 of the report for what is deliberately not built yet.
+testnet. It has not been audited. See §10 of the [design report](docs/design-report.md) for what
+is deliberately not built yet.
 
 ## Licence
 

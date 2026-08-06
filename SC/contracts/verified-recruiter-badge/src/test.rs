@@ -136,7 +136,10 @@ fn resolves_an_entity_by_id_and_by_controller() {
     let ctrl = Address::generate(&f.env);
     let id = f.register_org(&ctrl, "acme-robotics");
 
-    assert_eq!(f.client.get_entity(&id).unwrap().handle, s(&f.env, "acme-robotics"));
+    assert_eq!(
+        f.client.get_entity(&id).unwrap().handle,
+        s(&f.env, "acme-robotics")
+    );
     assert_eq!(f.client.get_entity_by_controller(&ctrl).unwrap().id, id);
     assert!(f.client.get_entity(&99).is_none());
     assert!(f.client.check(&s(&f.env, "nobody")).is_none());
@@ -206,7 +209,11 @@ fn rejects_handles_that_would_make_a_confusing_url() {
             )
             .unwrap_err()
             .unwrap();
-        assert_eq!(err, Error::InvalidHandle, "handle {bad:?} should be rejected");
+        assert_eq!(
+            err,
+            Error::InvalidHandle,
+            "handle {bad:?} should be rejected"
+        );
     }
 }
 
@@ -492,7 +499,10 @@ fn a_live_mandate_authorises_and_withdrawal_takes_it_away_immediately() {
     let mandate = f.mandate(&org_ctrl, org, person, rel);
 
     assert!(f.client.is_authorised(&org, &person));
-    assert_eq!(f.client.mandate_status(&mandate).unwrap(), ClaimStatus::Active);
+    assert_eq!(
+        f.client.mandate_status(&mandate).unwrap(),
+        ClaimStatus::Active
+    );
 
     f.client
         .set_mandate_status(&org_ctrl, &mandate, &ClaimStatus::Withdrawn);
@@ -520,7 +530,10 @@ fn a_mandate_stops_authorising_the_moment_its_window_closes() {
         ClaimStatus::Expired
     );
     // Nothing was written to make that true.
-    assert_eq!(f.client.get_mandate(&mandate).unwrap().status, ClaimStatus::Active);
+    assert_eq!(
+        f.client.get_mandate(&mandate).unwrap().status,
+        ClaimStatus::Active
+    );
 }
 
 #[test]
@@ -604,7 +617,10 @@ fn an_agency_can_hold_a_mandate_from_a_client_company() {
 
     assert!(f.client.is_authorised(&client_org, &agency));
     assert_eq!(f.client.mandates_held_by(&agency).len(), 1);
-    assert_eq!(f.client.mandates_issued_by(&client_org).get(0).unwrap(), mandate);
+    assert_eq!(
+        f.client.mandates_issued_by(&client_org).get(0).unwrap(),
+        mandate
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -696,12 +712,20 @@ fn metadata_can_be_repointed_by_the_subject_but_not_by_a_stranger() {
 
     let err = f
         .client
-        .try_update_metadata(&stranger, &id, &hash(&f.env, 7), &s(&f.env, "https://x/y.json"))
+        .try_update_metadata(
+            &stranger,
+            &id,
+            &hash(&f.env, 7),
+            &s(&f.env, "https://x/y.json"),
+        )
         .unwrap_err()
         .unwrap();
     assert_eq!(err, Error::NotAuthorized);
 
     f.client
         .update_metadata(&ctrl, &id, &hash(&f.env, 7), &s(&f.env, "https://x/y.json"));
-    assert_eq!(f.client.get_entity(&id).unwrap().metadata_hash, hash(&f.env, 7));
+    assert_eq!(
+        f.client.get_entity(&id).unwrap().metadata_hash,
+        hash(&f.env, 7)
+    );
 }

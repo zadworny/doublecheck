@@ -5,7 +5,9 @@
 //! feed an indexer should build the explorer from once the registry outgrows
 //! `MAX_INDEX_LEN` claims per entity.
 
-use crate::types::{ClaimStatus, Confirmation, EntityKind, EntityStatus, MandateType, RelationshipType};
+use crate::types::{
+    ClaimStatus, Confirmation, EntityKind, EntityStatus, MandateType, RelationshipType,
+};
 use soroban_sdk::{contractevent, Address, String};
 
 /// A new organisation or person passed verification.

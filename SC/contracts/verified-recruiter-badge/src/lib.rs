@@ -94,7 +94,9 @@ fn validate_handle(handle: &String) -> Result<(), Error> {
     let slice = &mut buf[..len as usize];
     handle.copy_into_slice(slice);
     for byte in slice.iter() {
-        let ok = byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_' | b'.');
+        let ok = byte.is_ascii_lowercase()
+            || byte.is_ascii_digit()
+            || matches!(byte, b'-' | b'_' | b'.');
         if !ok {
             return Err(Error::InvalidHandle);
         }
@@ -440,8 +442,12 @@ impl VerifiedRegistry {
             return Err(Error::WrongEntityKind);
         }
 
-        let confirmation =
-            Self::authorise_claim(&env, &caller, &org_entity.controller, &person_entity.controller)?;
+        let confirmation = Self::authorise_claim(
+            &env,
+            &caller,
+            &org_entity.controller,
+            &person_entity.controller,
+        )?;
 
         let id = storage::next_claim_id(&env);
         let claim = Relationship {
@@ -483,11 +489,21 @@ impl VerifiedRegistry {
     ///
     /// History is the point: "left in March" is a different and more useful
     /// answer than "no record found".
-    pub fn end_relationship(env: Env, caller: Address, id: u64, end_date: u64) -> Result<(), Error> {
+    pub fn end_relationship(
+        env: Env,
+        caller: Address,
+        id: u64,
+        end_date: u64,
+    ) -> Result<(), Error> {
         let mut claim = storage::require_relationship(&env, id)?;
         let org_entity = storage::require_entity(&env, claim.org)?;
         let person_entity = storage::require_entity(&env, claim.person)?;
-        Self::authorise_claim(&env, &caller, &org_entity.controller, &person_entity.controller)?;
+        Self::authorise_claim(
+            &env,
+            &caller,
+            &org_entity.controller,
+            &person_entity.controller,
+        )?;
 
         if end_date == 0 || end_date < claim.start_date {
             return Err(Error::InvalidDateRange);
@@ -606,8 +622,12 @@ impl VerifiedRegistry {
             }
         }
 
-        let confirmation =
-            Self::authorise_claim(&env, &caller, &org_entity.controller, &rep_entity.controller)?;
+        let confirmation = Self::authorise_claim(
+            &env,
+            &caller,
+            &org_entity.controller,
+            &rep_entity.controller,
+        )?;
 
         let id = storage::next_claim_id(&env);
         let claim = Mandate {
@@ -794,7 +814,8 @@ impl VerifiedRegistry {
             return false;
         };
         let now = env.ledger().timestamp();
-        if claim.status != ClaimStatus::Active || now < claim.valid_from || now > claim.valid_until {
+        if claim.status != ClaimStatus::Active || now < claim.valid_from || now > claim.valid_until
+        {
             return false;
         }
         Self::is_entity_valid(&env, org, now) && Self::is_entity_valid(&env, representative, now)

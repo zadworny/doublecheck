@@ -82,5 +82,5 @@ with the Stellar CLI today; see [`../SC/README.md`](../SC/README.md).
 
 Person records show a handle rather than a name because natural persons are registered with an empty
 `display_name` on purpose. The name lives in the off-chain credential at `metadata_uri` so it can be
-erased; the on-chain `metadata_hash` proves which version you were served. See §5 of the design
-report.
+erased; the on-chain `metadata_hash` proves which version you were served. See §5 of the
+[design report](../docs/design-report.md).

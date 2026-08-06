@@ -7,6 +7,9 @@ node_modules/
 dist/
 *.local
 
+# Host tooling
+.vercel/
+
 # Secrets — Stellar identities live in ~/.config/stellar, never in the repo
 .env
 .env.*
@@ -19,4 +22,4 @@ dist/
 *.swp
 
 # Internal-only copy of the design report (full text, incl. redacted sections)
-SC/docs/*.internal.md
+docs/*.internal.md

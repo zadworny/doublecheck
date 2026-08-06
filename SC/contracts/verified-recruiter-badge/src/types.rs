@@ -11,7 +11,7 @@
 //! Free-text fields are deliberately short and structural. Anything that is
 //! genuinely personal data (full name, contact details, CV, ID-check evidence)
 //! belongs in the off-chain credential referenced by `metadata_uri` and pinned
-//! by `metadata_hash`; see `docs/verified-registry-report.md` §5.
+//! by `metadata_hash`; see `docs/design-report.md` §5 at the repo root.
 
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 

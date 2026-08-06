@@ -7,9 +7,9 @@ approaching me?"
 
 Written in Rust for [Soroban](https://stellar.org/soroban), Stellar's smart-contract platform.
 
-**Scope and design rationale: [`docs/verified-registry-report.md`](docs/verified-registry-report.md).**
+**Scope and design rationale: [`docs/design-report.md`](../docs/design-report.md) at the repo root.**
 Read that first — it covers what stays off-chain, the personal-data decision, and where Stellar
-differs from the Base-based plan in the strategy PDF.
+differs from the chain the original plan named.
 
 ## Status
 
@@ -25,8 +25,6 @@ contracts/verified-recruiter-badge/src/
   storage.rs    storage access and TTL/rent bookkeeping
   events.rs     the event feed an off-chain indexer should follow
   test.rs       test suite
-docs/
-  verified-registry-report.md
 ```
 
 ## Build and test
@@ -50,10 +48,15 @@ Deployed and exercised end to end on 6 August 2026.
 | admin | `GCHCG2376NU6L7ZUTXCWC6A7D4PZMYHHODB7RJM6QRC6FWB5V5H72GQP` |
 | arbiter | `GASB4EXRHAYHMJ2TXKVBU43OVBFX52BA6VGP77VFTEYPLW375724M72V` |
 
-Live state: entity `1` = Acme Robotics GmbH (`acme-robotics`), entity `2` = a recruiter
-(`mara-lindqvist`), claim `1` = a company-confirmed relationship, claim `2` = a mandate since
-withdrawn, claim `3` = a self-asserted relationship. Check it yourself with no key of your own —
-reads are simulated, so nothing is signed or charged:
+Seeded with 5 entities and 8 claims, chosen to exercise every path the UI has to render:
+
+| | |
+|---|---|
+| `1` Acme Robotics GmbH · `2` a recruiter · `3` Beacon Talent Partners (agency) · `4`, `5` recruiters | entities |
+| `1` company-confirmed relationship · `2` mandate, since withdrawn · `3` self-asserted relationship | claims 1–3 |
+| `4` current employee · `5` past contractor, now reading as expired · `6` agency mandate, company to agency · `7` recruitment mandate resting on `4` · `8` self-asserted advisory role | claims 4–8 |
+
+Check any of it with no key of your own — reads are simulated, so nothing is signed or charged:
 
 ```bash
 export C=CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP
@@ -99,7 +102,7 @@ keys.
 ## Walking through the core flow
 
 Two more keys, standing in for the company and the recruiter. In production these are the passkey
-smart wallets described in §6 of the report, not CLI keypairs.
+smart wallets described in §6 of the [design report](../docs/design-report.md), not CLI keypairs.
 
 ```bash
 stellar keys generate jobited-acme --network testnet --fund
@@ -132,7 +135,7 @@ stellar contract invoke --id $C --source jobited-admin --network testnet -- \
 ```
 
 Register a recruiter. For natural persons leave `display_name` empty and serve the name from the
-off-chain credential — see §5 of the report.
+off-chain credential — see §5 of the [design report](../docs/design-report.md).
 
 ```bash
 stellar contract invoke --id $C --source jobited-admin --network testnet -- \
@@ -210,7 +213,7 @@ stellar contract bindings typescript \
 ```
 
 The [existing explorer](https://github.com/Prosper90/verified) maps onto this almost one-to-one;
-see §8 of the report for the field-by-field mapping.
+see §8 of the [design report](../docs/design-report.md) for the field-by-field mapping.
 
 ## Upgrades
 
