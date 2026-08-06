@@ -12,12 +12,12 @@ Design rationale — the data model, the trust model, and where the on-chain bou
 ## Status
 
 MVP. 30 tests passing, 38 KB Wasm against a 128 KB network limit, deployed to testnet. **Not
-audited**; see [Limitations](../docs/architecture.md#limitations) and [`SECURITY.md`](../SECURITY.md).
+audited**; see [`SECURITY.md`](../SECURITY.md) and [`docs/roadmap.md`](../docs/roadmap.md).
 
 ## Layout
 
 ```
-contracts/verified-recruiter-badge/src/
+contracts/doublecheck-registry/src/
   lib.rs        contract entry points and authorisation rules
   types.rs      data model — Entity, Relationship, Mandate, Check
   storage.rs    storage access and TTL/rent bookkeeping
@@ -117,7 +117,7 @@ stellar keys generate dc-arbiter --network testnet --fund
 
 stellar contract build --optimize
 stellar contract deploy \
-  --wasm target/wasm32v1-none/release/verified_recruiter_badge.optimized.wasm \
+  --wasm target/wasm32v1-none/release/doublecheck_registry.optimized.wasm \
   --source dc-admin --network testnet \
   -- \
   --admin   "$(stellar keys address dc-admin)" \
@@ -238,7 +238,7 @@ derived at read time rather than stored.
 |---|---|
 | Contract | `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP` |
 | Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) · [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) |
-| Wasm hash | `2dd41aa8036406cb0d868a02bd354448dc183b2d17a169401464e3e4667cb542` |
+| Wasm hash | `3be4a99da859fcb642ddceec919cce436d383c582fee26e8ed6ff96baa3abc4c` |
 | admin | `GCHCG2376NU6L7ZUTXCWC6A7D4PZMYHHODB7RJM6QRC6FWB5V5H72GQP` |
 | arbiter | `GASB4EXRHAYHMJ2TXKVBU43OVBFX52BA6VGP77VFTEYPLW375724M72V` |
 

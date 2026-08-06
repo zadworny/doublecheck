@@ -13,7 +13,7 @@ Report privately through
 rather than opening a public issue.
 
 Please include what an attacker gains, the sequence of calls that gets them there, and which key
-they need to control. A failing test against `SC/contracts/verified-recruiter-badge/src/test.rs` is
+they need to control. A failing test against `SC/contracts/doublecheck-registry/src/test.rs` is
 the most useful possible report.
 
 ## What is in scope
@@ -44,7 +44,9 @@ Also in scope: personal data reaching the ledger through a path the model does n
 
 ## Known and accepted
 
-Recorded so they are not re-reported:
+Recorded so they are not re-reported. The full list, with the work that would resolve each, is in
+[`docs/roadmap.md`](docs/roadmap.md).
+
 
 - `is_authorised(org, representative)` consults the **most recent** mandate between a pair. An older,
   still-valid mandate does not keep the pair authorised once a newer one lapses.

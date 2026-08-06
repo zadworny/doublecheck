@@ -66,14 +66,15 @@ encoding a result that could go stale.
 - **[`FE/README.md`](FE/README.md)** — running the explorer, how records travel from chain to screen,
   and regenerating the contract bindings.
 - **[`docs/deployment.md`](docs/deployment.md)** — hosting, operations, and the deferred indexer.
+- **[`docs/roadmap.md`](docs/roadmap.md)** — what is left to do, what blocks mainnet, and what is
+  deliberately out of scope.
 - **[`SECURITY.md`](SECURITY.md)** — reporting process, and what is in and out of scope.
 
 ## Status
 
 MVP. The contract implements the trust loop end to end with 30 passing tests and is deployed to
-testnet. It has not been audited. See
-[Scope](docs/architecture.md#scope) and [Limitations](docs/architecture.md#limitations) for what is
-deliberately absent.
+testnet. It has not been audited — an independent security review, a personal-data decision and
+proper admin key custody all block mainnet. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Licence
 

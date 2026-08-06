@@ -144,7 +144,7 @@ cd SC
 cargo test
 stellar contract build --optimize
 stellar contract deploy \
-  --wasm target/wasm32v1-none/release/verified_recruiter_badge.optimized.wasm \
+  --wasm target/wasm32v1-none/release/doublecheck_registry.optimized.wasm \
   --source dc-admin --network testnet \
   -- --admin   "$(stellar keys address dc-admin)" \
      --arbiter "$(stellar keys address dc-arbiter)"
@@ -182,6 +182,8 @@ quiet registry needs either a periodic sweep or a restore path. Both options are
 [Storage, rent and archival](architecture.md#storage-rent-and-archival).
 
 ## Deferred: the indexer
+
+Full rationale and the rest of the outstanding work: [`roadmap.md`](roadmap.md).
 
 Deliberately deferred, and the next infrastructure decision after hosting.
 

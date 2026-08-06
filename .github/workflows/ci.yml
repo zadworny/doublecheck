@@ -41,7 +41,7 @@ jobs:
 
       - name: Check Wasm against the network size limit
         run: |
-          WASM=target/wasm32v1-none/release/verified_recruiter_badge.wasm
+          WASM=target/wasm32v1-none/release/doublecheck_registry.wasm
           SIZE=$(wc -c < "$WASM")
           LIMIT=131072
           echo "$WASM: $SIZE bytes (limit $LIMIT)"

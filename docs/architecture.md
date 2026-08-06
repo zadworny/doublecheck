@@ -3,7 +3,8 @@
 How the DoubleCheck registry is built, what it stores, and why the boundaries fall where they do.
 
 For building and deploying the contract see [`SC/README.md`](../SC/README.md); for the explorer see
-[`FE/README.md`](../FE/README.md); for hosting and operations see [`deployment.md`](deployment.md).
+[`FE/README.md`](../FE/README.md); for hosting and operations see [`deployment.md`](deployment.md);
+for what is still outstanding see [`roadmap.md`](roadmap.md).
 
 ## Contents
 
@@ -82,7 +83,7 @@ with a twelve-month expiry cannot simply be written and forgotten — see
 
 ## Data model
 
-Three record types, defined in [`types.rs`](../SC/contracts/verified-recruiter-badge/src/types.rs).
+Three record types, defined in [`types.rs`](../SC/contracts/doublecheck-registry/src/types.rs).
 
 ### Entity
 
@@ -333,6 +334,8 @@ Deliberately not implemented, with the reasoning:
 ---
 
 ## Limitations
+
+Sequenced, with what unblocks each, in [`roadmap.md`](roadmap.md).
 
 **Not audited.** A security review of the authorisation paths, and a rehearsal of the upgrade path on
 testnet, should both precede any mainnet deployment.
