@@ -1,0 +1,22 @@
+# Rust / Soroban
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+*.local
+
+# Secrets — Stellar identities live in ~/.config/stellar, never in the repo
+.env
+.env.*
+!.env.example
+.stellar/
+
+# OS / editors
+.DS_Store
+.idea/
+*.swp
+
+# Internal-only copy of the design report (full text, incl. redacted sections)
+SC/docs/*.internal.md
