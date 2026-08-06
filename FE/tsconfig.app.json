@@ -17,9 +17,11 @@
     "jsx": "react-jsx",
 
     /* Linting */
+    /* `src/contract` is generated from the deployed contract by `npm run
+       bindings`; `erasableSyntaxOnly` is off because those bindings use TS
+       `enum`s, which Vite compiles but Node type-stripping cannot. */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"]

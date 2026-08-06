@@ -1,10 +1,11 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { search } from "../data";
+import { useRegistry } from "../data";
 import { Identicon } from "../components/Identicon";
 import { Panel } from "../components/Panel";
 
 export function Search() {
   const [params] = useSearchParams();
+  const { search } = useRegistry();
   const q = params.get("q") ?? "";
   const results = search(q);
 
@@ -29,7 +30,7 @@ export function Search() {
 
       {results.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 px-6 py-14 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-          No organisations, people or claim IDs match "{q}". Try a different name, domain, or a full claim hash.
+          No organisations, people or claim IDs match "{q}". Try a name, a handle, a domain, or a claim id.
         </div>
       ) : (
         <div className="space-y-6">

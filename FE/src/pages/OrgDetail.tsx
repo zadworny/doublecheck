@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
-import { getOrganisation, getRelationshipsForOrganisation, getMandatesForOrganisation } from "../data";
+import { useRegistry } from "../data";
 import { Identicon } from "../components/Identicon";
 import { HashId } from "../components/HashId";
 import { VerifiedBadge } from "../components/VerifiedBadge";
@@ -12,6 +12,7 @@ import { NotFound } from "./NotFound";
 
 export function OrgDetail() {
   const { id = "" } = useParams();
+  const { getOrganisation, getRelationshipsForOrganisation, getMandatesForOrganisation } = useRegistry();
   const org = getOrganisation(id);
   const [tab, setTab] = useState("all");
 
@@ -35,11 +36,19 @@ export function OrgDetail() {
             {org.verified && <VerifiedBadge issuer={org.issuer} />}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-            <span>{org.domain}</span>
-            <span>·</span>
-            <span>{org.industry}</span>
-            <span>·</span>
-            <span>{org.jurisdiction}</span>
+            <span>@{org.handle}</span>
+            {org.domain && (
+              <>
+                <span>·</span>
+                <span>{org.domain}</span>
+              </>
+            )}
+            {org.jurisdiction && (
+              <>
+                <span>·</span>
+                <span>{org.jurisdiction}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -47,12 +56,13 @@ export function OrgDetail() {
       <Panel>
         <dl className="grid grid-cols-1 divide-y divide-slate-100 text-sm sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-800/70">
           <div className="space-y-3 px-4 py-4">
-            <Row label="Block height" value={`#${org.blockNumber}`} />
-            <Row label="Organisation hash" value={<HashId value={org.id} />} />
-            <Row label="Verification issuer" value={org.issuer} />
+            <Row label="Entity id" value={`#${org.id}`} />
+            <Row label="Controller" value={<HashId value={org.controller} />} />
+            <Row label="Verified by" value={<HashId value={org.issuer} />} />
           </div>
           <div className="space-y-3 px-4 py-4">
             <Row label="Verified since" value={formatDate(org.verifiedAt)} />
+            <Row label="Badge expires" value={org.expiresAt ? formatDate(org.expiresAt) : "Never"} />
             <Row label="Relationships confirmed" value={String(relationships.length)} />
             <Row label="Mandates issued" value={String(mandates.length)} />
           </div>

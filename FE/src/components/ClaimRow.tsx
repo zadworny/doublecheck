@@ -1,9 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Claim } from "../data/types";
-import { getOrganisation } from "../data/organisations";
-import { getPerson } from "../data/people";
+import { useRegistry } from "../data";
 import { Identicon } from "./Identicon";
-import { HashId } from "./HashId";
 import { StatusPill } from "./StatusPill";
 import { ReportButton } from "./ReportButton";
 import { formatRelative } from "../lib/format";
@@ -13,9 +11,11 @@ interface ClaimRowProps {
 }
 
 export function ClaimRow({ claim }: ClaimRowProps) {
+  const { getOrganisation, getPerson } = useRegistry();
   const org = getOrganisation(claim.organisationId);
-  const personId = claim.kind === "relationship" ? claim.personId : claim.representativeId;
-  const person = getPerson(personId);
+  const subjectId = claim.kind === "relationship" ? claim.personId : claim.representativeId;
+  // A mandate holder can be an agency rather than a natural person.
+  const person = getPerson(subjectId) ?? getOrganisation(subjectId);
   const typeLabel = claim.kind === "relationship" ? claim.type.replace(/([a-z])([A-Z])/g, "$1 $2") : claim.mandateType;
 
   return (
@@ -27,8 +27,8 @@ export function ClaimRow({ claim }: ClaimRowProps) {
           </svg>
         </span>
 
-        <Link to={`/tx/${claim.id}`} className="shrink-0 text-sky-600 hover:underline dark:text-sky-400">
-          <HashId value={claim.id} copyable={false} />
+        <Link to={`/tx/${claim.id}`} className="shrink-0 font-mono text-sky-600 hover:underline dark:text-sky-400">
+          #{claim.id}
         </Link>
 
         <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
@@ -36,6 +36,14 @@ export function ClaimRow({ claim }: ClaimRowProps) {
         </span>
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
+          {claim.confirmation === "SelfAsserted" && (
+            <span
+              className="hidden rounded bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 sm:inline dark:text-amber-400"
+              title="Asserted by the subject, not confirmed by the organisation"
+            >
+              Self-asserted
+            </span>
+          )}
           <StatusPill status={claim.status} />
           <span className="hidden text-xs text-slate-400 md:inline">{formatRelative(claim.confirmedAt)}</span>
           <ReportButton subjectLabel={`${typeLabel} — ${org?.name ?? ""} → ${person?.name ?? ""}`} />
@@ -65,10 +73,10 @@ export function ClaimRow({ claim }: ClaimRowProps) {
         </svg>
         {person && (
           <Link
-            to={`/person/${person.id}`}
+            to={`/${person.kind === "organisation" ? "org" : "person"}/${person.id}`}
             className="flex min-w-0 shrink items-center gap-1.5 hover:text-sky-600 dark:hover:text-sky-400"
           >
-            <Identicon seed={person.id} size={20} />
+            <Identicon seed={person.id} size={20} rounded={person.kind !== "organisation"} />
             <span className="truncate font-medium text-slate-700 dark:text-slate-300">{person.name}</span>
           </Link>
         )}

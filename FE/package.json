@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bindings": "node scripts/generate-bindings.mjs"
   },
   "dependencies": {
+    "@stellar/stellar-sdk": "^16.2.0",
     "@tailwindcss/vite": "^4.3.3",
+    "buffer": "^6.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
-import { getPerson, getRelationshipsForPerson, getMandatesForPerson } from "../data";
+import { useRegistry } from "../data";
 import { Identicon } from "../components/Identicon";
 import { HashId } from "../components/HashId";
 import { VerifiedBadge } from "../components/VerifiedBadge";
@@ -12,6 +12,7 @@ import { NotFound } from "./NotFound";
 
 export function PersonDetail() {
   const { id = "" } = useParams();
+  const { getPerson, getRelationshipsForPerson, getMandatesForPerson } = useRegistry();
   const person = getPerson(id);
   const [tab, setTab] = useState("all");
 
@@ -36,16 +37,18 @@ export function PersonDetail() {
             <h1 className="text-xl font-semibold">{person.name}</h1>
             {person.verified && <VerifiedBadge issuer={person.issuer} />}
           </div>
-          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{person.headline}</div>
+          <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">@{person.handle}</div>
         </div>
       </div>
 
       <Panel>
         <dl className="grid grid-cols-1 divide-y divide-slate-100 text-sm sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-800/70">
           <div className="space-y-3 px-4 py-4">
-            <Row label="Address" value={<HashId value={person.id} />} />
-            <Row label="Verification issuer" value={person.issuer} />
+            <Row label="Entity id" value={`#${person.id}`} />
+            <Row label="Controller" value={<HashId value={person.controller} />} />
+            <Row label="Verified by" value={<HashId value={person.issuer} />} />
             <Row label="Identity verified since" value={formatDate(person.verifiedAt)} />
+            <Row label="Badge expires" value={person.expiresAt ? formatDate(person.expiresAt) : "Never"} />
           </div>
           <div className="space-y-3 px-4 py-4">
             <Row label="Current & active relationships" value={String(currentCount)} />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { search, type SearchResult } from "../data";
+import { useRegistry, type SearchResult } from "../data";
 import { Identicon } from "./Identicon";
 
 interface SearchBarProps {
@@ -14,7 +14,8 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
   claim: "Claim",
 };
 
-export function SearchBar({ size = "compact", placeholder = "Search by name, company or claim ID..." }: SearchBarProps) {
+export function SearchBar({ size = "compact", placeholder = "Search by name, handle, domain or claim id..." }: SearchBarProps) {
+  const { search } = useRegistry();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

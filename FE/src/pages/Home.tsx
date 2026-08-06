@@ -5,18 +5,21 @@ import { Panel } from "../components/Panel";
 import { ClaimRow } from "../components/ClaimRow";
 import { Identicon } from "../components/Identicon";
 import { formatDate } from "../lib/format";
-import {
-  organisations,
-  people,
-  relationships,
-  mandates,
-  getLatestClaims,
-  getLatestOrganisations,
-  getRelationshipsForOrganisation,
-  getMandatesForOrganisation,
-} from "../data";
+import { useRegistry } from "../data";
+import { chainConfig } from "../lib/chain";
 
 export function Home() {
+  const {
+    organisations,
+    people,
+    relationships,
+    mandates,
+    getLatestClaims,
+    getLatestOrganisations,
+    getRelationshipsForOrganisation,
+    getMandatesForOrganisation,
+  } = useRegistry();
+
   const latestClaims = getLatestClaims(8);
   const latestOrgs = getLatestOrganisations(6);
   const activeMandates = mandates.filter((m) => m.status === "Active").length;
@@ -85,7 +88,7 @@ export function Home() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{org.name}</span>
-                        <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">Blk {org.blockNumber}</span>
+                        <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">#{org.id}</span>
                       </div>
                       <div className="truncate text-xs text-slate-500 dark:text-slate-400">
                         Verified {formatDate(org.verifiedAt)} · {count} claims confirmed
@@ -98,12 +101,20 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="Latest transactions" bodyClassName="divide-y divide-slate-100 dark:divide-slate-800/70">
+        <Panel title="Latest claims" bodyClassName="divide-y divide-slate-100 dark:divide-slate-800/70">
           {latestClaims.map((claim) => (
             <ClaimRow key={claim.id} claim={claim} />
           ))}
         </Panel>
       </section>
+
+      <p className="text-center text-xs text-slate-400">
+        Read live from the{" "}
+        <a href={chainConfig.explorerUrl} target="_blank" rel="noreferrer" className="underline hover:text-sky-500">
+          registry contract
+        </a>{" "}
+        on Stellar. No wallet, no account — every read is a free simulation.
+      </p>
     </div>
   );
 }

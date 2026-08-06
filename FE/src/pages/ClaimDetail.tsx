@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getClaim, getOrganisation, getPerson, getRelationship } from "../data";
+import { useRegistry, CONFIRMATION_LABEL } from "../data";
 import { Identicon } from "../components/Identicon";
 import { HashId } from "../components/HashId";
 import { StatusPill } from "../components/StatusPill";
@@ -12,16 +12,19 @@ import { NotFound } from "./NotFound";
 
 export function ClaimDetail() {
   const { id = "" } = useParams();
+  const { getClaim, getOrganisation, getPerson, getRelationship } = useRegistry();
   const claim = getClaim(id);
 
   if (!claim) return <NotFound />;
 
   const org = getOrganisation(claim.organisationId);
-  const personId = claim.kind === "relationship" ? claim.personId : claim.representativeId;
-  const person = getPerson(personId);
+  const subjectId = claim.kind === "relationship" ? claim.personId : claim.representativeId;
+  // A mandate can be held by an agency, so the subject is not always a person.
+  const person = getPerson(subjectId) ?? getOrganisation(subjectId);
   const isRelationship = claim.kind === "relationship";
   const typeLabel = isRelationship ? claim.type.replace(/([a-z])([A-Z])/g, "$1 $2") : claim.mandateType;
-  const relatedRelationship = !isRelationship ? getRelationship(claim.relationshipId) : undefined;
+  const relatedRelationship =
+    !isRelationship && claim.relationshipId ? getRelationship(claim.relationshipId) : undefined;
 
   return (
     <div className="space-y-6">
@@ -31,9 +34,7 @@ export function ClaimDetail() {
             <span>{isRelationship ? "Relationship attestation" : "Representation mandate"}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <h1 className="font-mono text-base font-semibold sm:text-lg">
-              <HashId value={claim.id} headLen={14} tailLen={10} />
-            </h1>
+            <h1 className="font-mono text-base font-semibold sm:text-lg">Claim #{claim.id}</h1>
             <StatusPill status={claim.status} size="md" />
           </div>
         </div>
@@ -51,6 +52,20 @@ export function ClaimDetail() {
             </span>
           </Row>
           <Row label="Confirmed">{formatDate(claim.confirmedAt)}</Row>
+          <Row label="Attested by">
+            <span className="flex flex-wrap items-center justify-end gap-2">
+              <span
+                className={`rounded px-2 py-0.5 text-xs font-medium ${
+                  claim.confirmation === "SelfAsserted"
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                }`}
+              >
+                {CONFIRMATION_LABEL[claim.confirmation]}
+              </span>
+              <HashId value={claim.attestedBy} />
+            </span>
+          </Row>
 
           {isRelationship ? (
             <>
@@ -69,7 +84,7 @@ export function ClaimDetail() {
               {relatedRelationship && (
                 <Row label="Depends on relationship">
                   <Link to={`/tx/${relatedRelationship.id}`} className="text-sky-600 hover:underline dark:text-sky-400">
-                    <HashId value={relatedRelationship.id} />
+                    #{relatedRelationship.id}
                   </Link>
                 </Row>
               )}
@@ -80,8 +95,15 @@ export function ClaimDetail() {
 
       <Panel title={isRelationship ? "Organisation → Person" : "Organisation → Representative"}>
         <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-800/70">
-          <EntityCell heading="From (attesting organisation)" href={org ? `/org/${org.id}` : "#"} seed={org?.id ?? ""} rounded={false} name={org?.name} sub={org?.domain} />
-          <EntityCell heading={isRelationship ? "To (subject)" : "To (representative)"} href={person ? `/person/${person.id}` : "#"} seed={person?.id ?? ""} rounded name={person?.name} sub={person?.headline} />
+          <EntityCell heading="From (attesting organisation)" href={org ? `/org/${org.id}` : "#"} seed={org?.id ?? ""} rounded={false} name={org?.name} sub={org ? org.domain || `@${org.handle}` : undefined} />
+          <EntityCell
+            heading={isRelationship ? "To (subject)" : "To (representative)"}
+            href={person ? `/${person.kind === "organisation" ? "org" : "person"}/${person.id}` : "#"}
+            seed={person?.id ?? ""}
+            rounded={person?.kind !== "organisation"}
+            name={person?.name}
+            sub={person ? `@${person.handle}` : undefined}
+          />
         </div>
       </Panel>
 
@@ -126,7 +148,7 @@ function EntityCell({
         <div className="min-w-0">
           <div className="truncate font-medium text-slate-800 dark:text-slate-100">{name ?? "Unknown"}</div>
           {sub && <div className="truncate text-xs text-slate-500 dark:text-slate-400">{sub}</div>}
-          <HashId value={seed} className="text-slate-400" />
+          <div className="text-xs text-slate-400">#{seed}</div>
         </div>
       </Link>
     </div>

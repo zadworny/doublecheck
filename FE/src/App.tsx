@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { RegistryProvider } from "./data";
 import { Home } from "./pages/Home";
 import { Search } from "./pages/Search";
 import { OrgDetail } from "./pages/OrgDetail";
@@ -10,7 +11,13 @@ import { NotFound } from "./pages/NotFound";
 function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
+      <Route
+        element={
+          <RegistryProvider>
+            <Layout />
+          </RegistryProvider>
+        }
+      >
         <Route index element={<Home />} />
         <Route path="search" element={<Search />} />
         <Route path="org/:id" element={<OrgDetail />} />
