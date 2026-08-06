@@ -30,6 +30,29 @@ That means:
 
 ## 2. Vercel
 
+### Current deployment
+
+| | |
+|---|---|
+| Production | https://doublecheck-lime.vercel.app |
+| Project | `jobiteds-projects/doublecheck` |
+| Deployed from | the Vercel CLI, run inside `FE/` |
+
+**Git is not connected yet, so pushes to `main` do not redeploy.** Connecting it needs the Vercel
+GitHub App authorised against `zadworny/doublecheck`, which is a click-through on GitHub's side:
+
+1. [Vercel project settings → Git](https://vercel.com/jobiteds-projects/doublecheck/settings/git) →
+   **Connect Git Repository** → GitHub → `zadworny/doublecheck`. Approve the app when GitHub asks.
+2. Then, in **Settings → Build & Deployment**, set **Root Directory** to `FE`. This is required and
+   easy to miss: the CLI deploys were run from inside `FE`, so it was implicit, but a Git-triggered
+   build starts at the repo root and will fail with "no package.json found" without it.
+
+Until that is done, redeploy by hand:
+
+```bash
+cd FE && npx vercel --prod
+```
+
 ### What you need before starting
 
 | | |

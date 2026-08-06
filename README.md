@@ -28,10 +28,11 @@ claim confirmed by the company's own key reads differently from one the recruite
 themselves. Every badge and every mandate is revocable in one transaction and expires on its own
 with no cron job.
 
-## Live on Stellar testnet
+## Live
 
 | | |
 |---|---|
+| **Explorer** | **https://doublecheck-lime.vercel.app** |
 | Contract | `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP` |
 | Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) |
 | Seeded with | 5 entities, 8 claims — covering company-confirmed, self-asserted, withdrawn and expired |
