@@ -37,7 +37,7 @@
                   "bytes": "0202020202020202020202020202020202020202020202020202020202020202"
                 },
                 {
-                  "string": "https://verify.jobited.com/p/mara.json"
+                  "string": "https://verify.example.com/p/mara.json"
                 },
                 {
                   "u64": "1781536000"

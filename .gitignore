@@ -26,5 +26,5 @@ dist/
 .idea/
 *.swp
 
-# Internal-only copy of the design report (full text, incl. redacted sections)
+# Internal-only copy of the architecture doc (full text, incl. redacted sections)
 docs/*.internal.md

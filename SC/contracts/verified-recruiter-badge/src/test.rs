@@ -56,7 +56,7 @@ impl Fixture {
             &s(&self.env, "acme-robotics.de"),
             &s(&self.env, "Germany"),
             &hash(&self.env, 1),
-            &s(&self.env, "https://verify.jobited.com/c/acme.json"),
+            &s(&self.env, "https://verify.example.com/c/acme.json"),
             &(self.now() + YEAR),
         )
     }
@@ -70,7 +70,7 @@ impl Fixture {
             &s(&self.env, ""),
             &s(&self.env, ""),
             &hash(&self.env, 2),
-            &s(&self.env, "https://verify.jobited.com/p/mara.json"),
+            &s(&self.env, "https://verify.example.com/p/mara.json"),
             &(self.now() + YEAR),
         )
     }

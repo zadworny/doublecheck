@@ -4,29 +4,29 @@ Trust infrastructure that lets a company cryptographically confirm the people an
 
 ---
 
-A recruiter messages you on LinkedIn about a job at a company you've heard of. Are they real? Do
-they actually work there? Is that company even hiring? Today there is no way to check any of it in
-under an hour, and job-scam fraud runs into the billions a year because of it.
+A recruiter makes contact about a role at a company. Is the person real? Do they actually work
+there? Are they authorised to be recruiting for it right now? None of those questions can currently
+be answered quickly, and job-scam fraud runs into billions a year in part because of it.
 
-DoubleCheck is the registry that answers those three questions in one click — no wallet, no account,
-no crypto knowledge on the reader's side.
+DoubleCheck answers all three from a single link — with no wallet, no account and no prior setup on
+the reader's side.
 
 | | |
 |---|---|
 | [`SC/`](SC/) | Soroban smart contract (Rust) — the registry itself |
 | [`FE/`](FE/) | React + Vite explorer — the public verifier |
-| [`docs/`](docs/) | design rationale and deployment |
+| [`docs/`](docs/) | architecture and deployment |
 
 ## How it works
 
-A human at the issuer vets an organisation or a person and registers them on-chain. The
-organisation's own key then attests who works for it, and issues time-bound **mandates** — "this
-person may recruit for us, for this scope, until this date."
+An issuer vets an organisation or a person and registers them on-chain. The organisation's own key
+then attests who is affiliated with it, and issues time-bound **mandates**: "this person may recruit
+for us, within this scope, until this date."
 
-Anyone can then check a handle in a single read call, and the answer includes *who signed it*: a
-claim confirmed by the company's own key reads differently from one the recruiter asserted about
-themselves. Every badge and every mandate is revocable in one transaction and expires on its own
-with no cron job.
+Any handle can then be checked with a single read call, and the answer records *which key signed it*.
+A claim confirmed by the organisation's own key is distinguishable from one the subject asserted
+about themselves — verifiably so, without trusting the site presenting it. Every badge and every
+mandate is revocable in one transaction and expires without any scheduled job.
 
 ## Live
 
@@ -55,20 +55,20 @@ cd SC && cargo test
 
 ## Start here
 
-- **[`docs/design-report.md`](docs/design-report.md)** — scope, what stays off-chain, the
-  personal-data decision, and how Stellar changes the chain the original plan named.
-- **[`SC/README.md`](SC/README.md)** — build, test, deploy, and a full CLI walkthrough of the trust
-  loop.
-- **[`FE/README.md`](FE/README.md)** — running the explorer, how the data gets from chain to screen,
+- **[`docs/architecture.md`](docs/architecture.md)** — the data model, the trust model, where the
+  on-chain boundary falls, and how personal data is handled.
+- **[`SC/README.md`](SC/README.md)** — contract interface reference, build, test, deploy, and a CLI
+  walkthrough of the full trust loop.
+- **[`FE/README.md`](FE/README.md)** — running the explorer, how records travel from chain to screen,
   and regenerating the contract bindings.
-- **[`docs/deployment.md`](docs/deployment.md)** — putting the explorer on Vercel and the contract on
-  Stellar, plus what to watch once it is live.
+- **[`docs/deployment.md`](docs/deployment.md)** — hosting, operations, and the deferred indexer.
 
 ## Status
 
 MVP. The contract implements the trust loop end to end with 28 passing tests and is deployed to
-testnet. It has not been audited. See §10 of the [design report](docs/design-report.md) for what
-is deliberately not built yet.
+testnet. It has not been audited. See
+[Scope](docs/architecture.md#scope) and [Limitations](docs/architecture.md#limitations) for what is
+deliberately absent.
 
 ## Licence
 

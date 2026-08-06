@@ -1,8 +1,8 @@
-//! On-chain data model for the Jobited verified-recruiter registry.
+//! On-chain data model for the DoubleCheck registry.
 //!
 //! The model has three record types:
 //!
-//! * [`Entity`] — an organisation or a natural person that Jobited has vetted.
+//! * [`Entity`] — an organisation or a natural person the issuer has vetted.
 //! * [`Relationship`] — an organisation's attestation that a person is (or was)
 //!   employed by, contracted to, or otherwise affiliated with it.
 //! * [`Mandate`] — an organisation's authorisation for one of those people to
@@ -11,7 +11,7 @@
 //! Free-text fields are deliberately short and structural. Anything that is
 //! genuinely personal data (full name, contact details, CV, ID-check evidence)
 //! belongs in the off-chain credential referenced by `metadata_uri` and pinned
-//! by `metadata_hash`; see `docs/design-report.md` §5 at the repo root.
+//! by `metadata_hash`; see `docs/architecture.md` at the repo root.
 
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 
@@ -19,7 +19,7 @@ use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 // Limits
 // ---------------------------------------------------------------------------
 
-/// Minimum length of a public handle (`verify.jobited.com/<handle>`).
+/// Minimum length of a public handle; it forms the verifier's URL segment.
 pub const MIN_HANDLE_LEN: u32 = 3;
 /// Maximum length of a public handle.
 pub const MAX_HANDLE_LEN: u32 = 64;
@@ -129,8 +129,9 @@ pub enum Confirmation {
     /// The organisation's own controller key signed the write. This is the
     /// "company-confirmed" tier.
     CounterpartyConfirmed = 1,
-    /// Jobited recorded it after an out-of-band check (DNS record, email-domain
-    /// challenge, light KYB) on behalf of an organisation with no wallet.
+    /// The issuer recorded it after an out-of-band check (DNS record,
+    /// email-domain challenge, light KYB) on behalf of an organisation that
+    /// holds no key of its own.
     IssuerConfirmed = 2,
 }
 
@@ -155,7 +156,7 @@ pub struct Entity {
     /// Unique public slug used by the verifier page.
     pub handle: String,
     /// Organisations: registered legal name. Natural persons: leave empty and
-    /// serve the name from the off-chain credential — see the report §5.
+    /// serve the name from the off-chain credential — see `docs/architecture.md`.
     pub display_name: String,
     /// Primary domain, used for the DNS / email-domain challenge. Empty for
     /// natural persons.
@@ -163,19 +164,19 @@ pub struct Entity {
     /// Free-text jurisdiction, e.g. "Germany". Empty if not applicable.
     pub jurisdiction: String,
     /// SHA-256 of the canonical off-chain credential JSON. Lets any reader
-    /// prove the off-chain profile they fetched is the one Jobited signed.
+    /// prove the off-chain profile they fetched is the one the issuer signed.
     pub metadata_hash: BytesN<32>,
     /// Where that credential is served from (https / ipfs).
     pub metadata_uri: String,
-    /// The address that performed the verification. Jobited today, an accredited
-    /// issuer later.
+    /// The address that performed the verification. A single operator today, an
+    /// accredited issuer registry later.
     pub issuer: Address,
     pub status: EntityStatus,
     pub verified_at: u64,
     /// Unix seconds. `0` means no expiry.
     pub expires_at: u64,
     /// Count of upheld complaints. Reputation collateral in place of a cash
-    /// stake — see the report §4.
+    /// stake — see `docs/architecture.md`.
     pub strikes: u32,
 }
 

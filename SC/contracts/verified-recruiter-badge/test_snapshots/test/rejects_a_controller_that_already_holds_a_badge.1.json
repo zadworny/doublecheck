@@ -37,7 +37,7 @@
                   "bytes": "0101010101010101010101010101010101010101010101010101010101010101"
                 },
                 {
-                  "string": "https://verify.jobited.com/c/acme.json"
+                  "string": "https://verify.example.com/c/acme.json"
                 },
                 {
                   "u64": "1781536000"
@@ -213,7 +213,7 @@
                       "symbol": "metadata_uri"
                     },
                     "val": {
-                      "string": "https://verify.jobited.com/c/acme.json"
+                      "string": "https://verify.example.com/c/acme.json"
                     }
                   },
                   {

@@ -1,5 +1,5 @@
 #![no_std]
-//! # Verified Recruiter Badge — Soroban registry (MVP)
+//! # DoubleCheck — Soroban trust registry
 //!
 //! A public, wallet-free registry of vetted recruiters, the organisations they
 //! work for, and the mandates those organisations have given them.
@@ -9,7 +9,7 @@
 //! On-chain: who was verified, by whom, when, until when, and whether that is
 //! still true. Every claim carries the key that signed it, so a reader can tell
 //! a company-confirmed mandate from a self-asserted one without trusting
-//! Jobited's website.
+//! the operator's website.
 //!
 //! Off-chain: the verification evidence (ID scans, KYB reports, references),
 //! the complaint queue behind the "report" button, billing, and the human
@@ -18,7 +18,7 @@
 //!
 //! ## Trust model
 //!
-//! * **admin** — the issuing authority (Jobited). Registers, renews, suspends
+//! * **admin** — the issuing authority. Registers, renews, suspends
 //!   and revokes entities. Cannot forge a company-confirmed claim: a claim it
 //!   writes is stamped [`Confirmation::IssuerConfirmed`], never
 //!   [`Confirmation::CounterpartyConfirmed`].
@@ -50,7 +50,7 @@ use events::{
 
 contractmeta!(
     key = "Description",
-    val = "Jobited verified recruiter, organisation, relationship and mandate registry"
+    val = "DoubleCheck: verified organisations, people, relationships and mandates"
 );
 
 // ---------------------------------------------------------------------------
