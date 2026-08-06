@@ -339,7 +339,8 @@ pub enum Error {
     /// Referenced relationship does not belong to the same org and person.
     RelationshipMismatch = 23,
 
-    /// An on-chain index vector is full; read events instead.
+    /// Reserved. Indexing is best-effort and no longer fails a write; the
+    /// discriminant is kept so existing error codes do not shift.
     IndexFull = 30,
     NoPendingAdmin = 31,
 }

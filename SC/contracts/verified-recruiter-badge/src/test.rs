@@ -250,13 +250,63 @@ fn renewal_restores_a_lapsed_badge() {
 }
 
 #[test]
+fn the_arbiter_cannot_revoke() {
+    // Revocation is terminal and cannot be undone by anyone, so the complaint
+    // role must not be able to reach it. A compromised arbiter key can withhold
+    // badges, not destroy them.
+    let f = setup();
+    let id = f.register_org(&Address::generate(&f.env), "acme-robotics");
+
+    let err = f
+        .client
+        .try_set_entity_status(&f.arbiter, &id, &EntityStatus::Revoked)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, Error::NotAuthorized);
+
+    // It can still suspend, and lift its own suspension.
+    f.client
+        .set_entity_status(&f.arbiter, &id, &EntityStatus::Suspended);
+    assert!(!f.client.check_by_id(&id).unwrap().valid);
+    f.client
+        .set_entity_status(&f.arbiter, &id, &EntityStatus::Active);
+    assert!(f.client.check_by_id(&id).unwrap().valid);
+}
+
+#[test]
+fn a_full_index_does_not_block_claims_about_the_subject() {
+    // `attest_relationship` indexes against the subject as well as the
+    // attester, and index entries cannot be removed. If a full index failed the
+    // write, one verified organisation could fill a person's index and
+    // permanently prevent every other organisation from attesting about them.
+    let f = setup();
+    let spammer_ctrl = Address::generate(&f.env);
+    let honest_ctrl = Address::generate(&f.env);
+    let spammer = f.register_org(&spammer_ctrl, "spam-corp");
+    let honest = f.register_org(&honest_ctrl, "acme-robotics");
+    let victim = f.register_person(&Address::generate(&f.env), "mara-lindqvist");
+
+    for _ in 0..MAX_INDEX_LEN {
+        f.attest(&spammer_ctrl, spammer, victim);
+    }
+    assert_eq!(f.client.relationships_about(&victim).len(), MAX_INDEX_LEN);
+
+    // The claim is still accepted and still readable by id; only the
+    // convenience index stops growing.
+    let id = f.attest(&honest_ctrl, honest, victim);
+    let claim = f.client.get_relationship(&id).unwrap();
+    assert_eq!(claim.org, honest);
+    assert_eq!(f.client.relationships_about(&victim).len(), MAX_INDEX_LEN);
+}
+
+#[test]
 fn the_arbiter_can_suspend_and_revocation_is_terminal() {
     let f = setup();
     let ctrl = Address::generate(&f.env);
     let id = f.register_org(&ctrl, "acme-robotics");
 
     f.client
-        .set_entity_status(&f.arbiter, &id, &EntityStatus::Suspended);
+        .set_entity_status(&f.admin, &id, &EntityStatus::Suspended);
     assert!(!f.client.check_by_id(&id).unwrap().valid);
 
     f.client

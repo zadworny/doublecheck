@@ -53,6 +53,10 @@ The contract needs the [Stellar CLI](https://developers.stellar.org/docs/tools/d
 cd SC && cargo test
 ```
 
+Every entry has a shareable link at `/<handle>`, a QR code for calls and messages, and HTML or
+Markdown embeds for signatures and profiles — each resolving to the live verifier rather than
+encoding a result that could go stale.
+
 ## Start here
 
 - **[`docs/architecture.md`](docs/architecture.md)** — the data model, the trust model, where the
@@ -62,10 +66,11 @@ cd SC && cargo test
 - **[`FE/README.md`](FE/README.md)** — running the explorer, how records travel from chain to screen,
   and regenerating the contract bindings.
 - **[`docs/deployment.md`](docs/deployment.md)** — hosting, operations, and the deferred indexer.
+- **[`SECURITY.md`](SECURITY.md)** — reporting process, and what is in and out of scope.
 
 ## Status
 
-MVP. The contract implements the trust loop end to end with 28 passing tests and is deployed to
+MVP. The contract implements the trust loop end to end with 30 passing tests and is deployed to
 testnet. It has not been audited. See
 [Scope](docs/architecture.md#scope) and [Limitations](docs/architecture.md#limitations) for what is
 deliberately absent.

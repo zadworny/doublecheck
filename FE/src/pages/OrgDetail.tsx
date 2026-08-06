@@ -5,13 +5,15 @@ import { Identicon } from "../components/Identicon";
 import { HashId } from "../components/HashId";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Panel } from "../components/Panel";
+import { SharePanel } from "../components/SharePanel";
 import { Tabs } from "../components/Tabs";
 import { ClaimRow } from "../components/ClaimRow";
 import { formatDate } from "../lib/format";
 import { NotFound } from "./NotFound";
 
-export function OrgDetail() {
-  const { id = "" } = useParams();
+export function OrgDetail({ orgId }: { orgId?: string } = {}) {
+  const params = useParams();
+  const id = orgId ?? params.id ?? "";
   const { getOrganisation, getRelationshipsForOrganisation, getMandatesForOrganisation } = useRegistry();
   const org = getOrganisation(id);
   const [tab, setTab] = useState("all");
@@ -68,6 +70,8 @@ export function OrgDetail() {
           </div>
         </dl>
       </Panel>
+
+      <SharePanel subject={org} />
 
       <Panel>
         <div className="px-2 pt-1 sm:px-3">

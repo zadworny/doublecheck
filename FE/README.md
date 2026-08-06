@@ -68,6 +68,26 @@ following the contract's events (`EntityRegistered`, `RelationshipAttested`, `Ma
 | `confirmation` | the "Self-asserted" / "Confirmed by the organisation" label |
 | `bigint` Unix seconds | ISO strings for the date formatters |
 
+### Routes
+
+| Path | Renders |
+|---|---|
+| `/<handle>` | the canonical shareable verification link |
+| `/org/:id`, `/person/:id` | the same pages, addressed by entity id |
+| `/tx/:id` | a relationship or mandate |
+| `/search?q=` | search across names, handles, domains and claim ids |
+
+`/<handle>` is registered last, so every static path and prefixed route matches first.
+
+### Sharing
+
+`SharePanel` generates the three carriers that get a reader to a verification: the handle link, a QR
+code, and HTML/Markdown embeds. The QR is built locally in `src/lib/qr.ts` and rendered as SVG so it
+stays sharp in print and can be downloaded without rasterisation.
+
+Embeds carry a *link*, never a rendered verdict — a static "verified" image would keep asserting
+itself after a revocation.
+
 ### Two values are computed here rather than fetched
 
 **Expiry.** The contract derives `Expired` at read time from a record's end date rather than storing

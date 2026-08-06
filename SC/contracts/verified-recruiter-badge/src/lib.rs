@@ -338,6 +338,13 @@ impl VerifiedRegistry {
         if status == EntityStatus::Expired {
             return Err(Error::InvalidStatus);
         }
+        // Revocation is terminal and cannot be undone by anyone, including the
+        // admin. The arbiter exists to record complaint outcomes, so it can
+        // withhold a badge while a case is open and restore it afterwards — but
+        // a compromised arbiter key must not be able to destroy the registry.
+        if caller != storage::admin(&env)? && status == EntityStatus::Revoked {
+            return Err(Error::NotAuthorized);
+        }
         let mut entity = storage::require_entity(&env, id)?;
         if entity.status == EntityStatus::Revoked {
             return Err(Error::InvalidStatus);
@@ -468,8 +475,9 @@ impl VerifiedRegistry {
         };
 
         storage::put_relationship(&env, &claim);
-        storage::index_push(&env, &DataKey::OrgRels(org), id)?;
-        storage::index_push(&env, &DataKey::PersonRels(person), id)?;
+        // Best-effort: a full index does not block the claim. See `index_push`.
+        storage::index_push(&env, &DataKey::OrgRels(org), id);
+        storage::index_push(&env, &DataKey::PersonRels(person), id);
         storage::extend_instance(&env);
 
         RelationshipAttested {
@@ -648,8 +656,8 @@ impl VerifiedRegistry {
         };
 
         storage::put_mandate(&env, &claim);
-        storage::index_push(&env, &DataKey::OrgMandates(org), id)?;
-        storage::index_push(&env, &DataKey::PersonMandates(representative), id)?;
+        storage::index_push(&env, &DataKey::OrgMandates(org), id);
+        storage::index_push(&env, &DataKey::PersonMandates(representative), id);
         env.storage()
             .persistent()
             .set(&DataKey::LiveMandate(org, representative), &id);

@@ -136,14 +136,17 @@ Three roles, all addresses, all configurable after deployment.
 |---|---|
 | **admin** | registers, renews, suspends and revokes entities; rotates controllers; upgrades the contract |
 | **entity controller** | attests its own organisation's relationships and mandates; withdraws claims about itself |
-| **arbiter** | records the outcome of the off-chain complaint process — disputes, suspensions, strikes |
+| **arbiter** | records the outcome of the off-chain complaint process — disputes, suspensions, strikes. **Cannot revoke** |
 
 Constraints worth stating explicitly:
 
 - **The admin cannot forge a company confirmation.** A claim the admin writes is recorded as
   `IssuerConfirmed`, never `CounterpartyConfirmed`. The distinction is visible to every reader.
-- **`Revoked` is terminal.** A revoked badge cannot be reinstated, because a reader who saw
-  "revoked" must never be contradicted later. Re-admitting a subject means issuing a new entity.
+- **`Revoked` is terminal, and admin-only.** A revoked badge cannot be reinstated by anyone, because
+  a reader who saw "revoked" must never be contradicted later. Re-admitting a subject means issuing
+  a new entity. The arbiter can suspend a badge while a case is open and restore it afterwards, but
+  cannot reach the irreversible state — a compromised complaint key must not be able to destroy the
+  registry.
 - **A subject can always withdraw a claim about themselves**, and only the subject or the admin can
   change a relationship's `public_display`. An organisation cannot pin a public statement about a
   person against their will.
@@ -264,6 +267,12 @@ emits an event on every state change — `EntityRegistered`, `EntityStatusSet`,
 `RelationshipAttested`, `MandateIssued`, `ClaimStatusSet`, `StrikeAdded`, `ControllerRotated` —
 which is what an indexer should consume.
 
+Reaching the cap is **not** an error: the claim is written and remains readable by id, and only the
+index stops growing. Failing the write instead would be a griefing vector, because
+`attest_relationship` indexes against the subject as well as the attester and index entries cannot
+be removed — one verified organisation could otherwise fill a person's index and permanently prevent
+every other organisation from attesting anything about them.
+
 ---
 
 ## Implementing on Soroban
@@ -290,6 +299,21 @@ Face ID or a fingerprint, no seed phrase. Readers need no key at all, since ever
 simulation.
 
 ---
+
+## Distribution
+
+A registry entry nobody can reach is worth very little. The reader arrives from somewhere — usually
+from the person being checked — so the explorer generates three carriers for every entity:
+
+- **A handle link**, `/<handle>`, which is what goes in an email signature and gets read out on a
+  call. Handles are also stable across a redeployment, where entity ids would not be.
+- **A QR code**, for showing on a video call or pasting into a message; it opens the verifier in any
+  phone camera.
+- **HTML and Markdown embeds** for signatures, profiles and documentation.
+
+Every carrier resolves to the live verifier rather than encoding a result. A badge image that
+asserted "verified" on its own would keep asserting it after a revocation, which is precisely the
+failure this registry exists to prevent.
 
 ## Scope
 
@@ -321,8 +345,8 @@ records. The contract's event stream exists so an indexer can replace this; noth
 **Status history is not stored.** Every change emits an event, but the contract keeps no timeline, so
 the explorer shows only what a record itself proves. An indexer would resolve this.
 
-**Index vectors are capped** at 512 claim ids per entity. Past that, `IndexFull` is returned and
-callers must read events instead.
+**Index vectors are capped** at 512 claim ids per entity. Past that a claim is still written and
+still readable by id, but does not appear in index reads; the event stream remains complete.
 
 **Free RPC is a single point of failure.** Each page load makes roughly
 `entity_count + 2 × claim_count` simulated reads against a public endpoint with no uptime guarantee.

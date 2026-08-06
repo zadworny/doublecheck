@@ -11,8 +11,8 @@ Design rationale — the data model, the trust model, and where the on-chain bou
 
 ## Status
 
-MVP. 28 tests passing, 38 KB Wasm against a 128 KB network limit, deployed to testnet. **Not
-audited**; see [Limitations](../docs/architecture.md#limitations).
+MVP. 30 tests passing, 38 KB Wasm against a 128 KB network limit, deployed to testnet. **Not
+audited**; see [Limitations](../docs/architecture.md#limitations) and [`SECURITY.md`](../SECURITY.md).
 
 ## Layout
 
@@ -52,7 +52,7 @@ stellar contract build --optimize
 | `register_entity(kind, controller, handle, display_name, domain, jurisdiction, metadata_hash, metadata_uri, expires_at) -> u64` | admin | returns the new entity id |
 | `update_metadata(caller, id, metadata_hash, metadata_uri)` | entity controller or admin | repoints the off-chain credential |
 | `renew_entity(id, expires_at)` | admin | also clears a suspension |
-| `set_entity_status(caller, id, status)` | admin or arbiter | `Revoked` is terminal |
+| `set_entity_status(caller, id, status)` | admin, or arbiter for `Active`/`Suspended` | `Revoked` is terminal and admin-only |
 | `rotate_controller(id, new_controller)` | admin | key recovery only; the sole way a badge moves |
 | `add_strike(caller, id) -> u32` | admin or arbiter | records an upheld complaint |
 
@@ -67,9 +67,13 @@ stellar contract build --optimize
 | `issue_mandate(caller, org, representative, relationship, mandate_type, scope, territory, valid_from, valid_until, detail_hash) -> u64` | org controller, representative, or admin | `valid_until` may not be zero |
 | `set_mandate_status(caller, id, status)` | see below | |
 
-Status transitions: the admin may set any status; the arbiter may set `Disputed`, `Suspended` or
-`Withdrawn`; an organisation's controller may set any status on its own claims; a subject may only
+Claim status transitions: the admin may set any status; the arbiter may set `Disputed`, `Suspended`
+or `Withdrawn`; an organisation's controller may set any status on its own claims; a subject may only
 set `Withdrawn` on a claim about themselves.
+
+Claim writes always succeed even when an entity's index vector is full — the claim is stored and
+readable by id, and only the index stops growing. See
+[Storage, rent and archival](../docs/architecture.md#storage-rent-and-archival).
 
 ### Reads
 

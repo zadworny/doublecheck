@@ -5,13 +5,15 @@ import { Identicon } from "../components/Identicon";
 import { HashId } from "../components/HashId";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Panel } from "../components/Panel";
+import { SharePanel } from "../components/SharePanel";
 import { Tabs } from "../components/Tabs";
 import { ClaimRow } from "../components/ClaimRow";
 import { formatDate } from "../lib/format";
 import { NotFound } from "./NotFound";
 
-export function PersonDetail() {
-  const { id = "" } = useParams();
+export function PersonDetail({ personId }: { personId?: string } = {}) {
+  const params = useParams();
+  const id = personId ?? params.id ?? "";
   const { getPerson, getRelationshipsForPerson, getMandatesForPerson } = useRegistry();
   const person = getPerson(id);
   const [tab, setTab] = useState("all");
@@ -57,6 +59,8 @@ export function PersonDetail() {
           </div>
         </dl>
       </Panel>
+
+      <SharePanel subject={person} />
 
       <Panel>
         <div className="px-2 pt-1 sm:px-3">

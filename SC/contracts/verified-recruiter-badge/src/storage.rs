@@ -234,15 +234,28 @@ pub fn index(env: &Env, key: &DataKey) -> Vec<u64> {
     }
 }
 
-/// Appends a claim id to an index vector, refusing to grow past
-/// [`MAX_INDEX_LEN`] so a single entity cannot make its own reads unaffordable.
-pub fn index_push(env: &Env, key: &DataKey, id: u64) -> Result<(), Error> {
+/// Appends a claim id to an index vector, stopping at [`MAX_INDEX_LEN`] so a
+/// single entity cannot make its own reads unaffordable.
+///
+/// Reaching the cap is **not** an error. The indexes are a convenience that
+/// lets the explorer work with no backend; the contract's events are the
+/// authoritative record and an indexer is expected to take over well before
+/// this many claims accumulate.
+///
+/// Failing the write instead would be a griefing vector: `attest_relationship`
+/// indexes against the *subject* as well as the attester, so any one verified
+/// organisation could fill a person's index and permanently prevent every other
+/// organisation from attesting anything about them. Index entries cannot be
+/// removed, so that damage would be irreversible.
+///
+/// Returns whether the id was indexed.
+pub fn index_push(env: &Env, key: &DataKey, id: u64) -> bool {
     let mut ids = index(env, key);
     if ids.len() >= MAX_INDEX_LEN {
-        return Err(Error::IndexFull);
+        return false;
     }
     ids.push_back(id);
     env.storage().persistent().set(key, &ids);
     extend_record(env, key);
-    Ok(())
+    true
 }
