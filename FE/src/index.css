@@ -25,6 +25,60 @@ body {
   @apply bg-sky-500/30;
 }
 
+/* Hero entry: content rises into place, the search field settling last. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Chrome that persists across routes: shorter, no travel, plays on first load only. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.45s ease-out both;
+}
+
+/* Draws the eye to the search field once it has arrived. */
+@keyframes search-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(14 165 233 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(14 165 233 / 0.14);
+  }
+}
+
+.animate-search-glow {
+  animation: search-glow 1.6s ease-out 0.75s 1 both;
+  border-radius: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in,
+  .animate-fade-in,
+  .animate-search-glow {
+    animation: none;
+  }
+}
+
 /* Subtle scrollbar for the explorer feel */
 ::-webkit-scrollbar {
   width: 10px;

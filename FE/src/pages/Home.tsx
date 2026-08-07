@@ -24,21 +24,53 @@ export function Home() {
   const latestOrgs = getLatestOrganisations(6);
   const activeMandates = mandates.filter((m) => m.status === "Active").length;
 
+  // Sample handles so an empty search box is never a dead end.
+  const examples = [
+    ...people.slice(0, 2).map((p) => ({ label: `@${p.handle}`, to: `/person/${p.id}` })),
+    ...organisations.slice(0, 2).map((o) => ({ label: `@${o.handle}`, to: `/org/${o.id}` })),
+  ];
+
   return (
     <div className="space-y-8">
-      <section className="flex flex-col items-center gap-4 py-6 text-center sm:py-10">
-        <h1 className="max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
+      <section className="flex flex-col items-center gap-5 py-8 text-center sm:py-14">
+        <h1 className="animate-rise-in max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
           Check the company relationship. Check the mandate.
         </h1>
-        <p className="max-w-xl text-sm text-slate-500 dark:text-slate-400">
+        <p
+          className="animate-rise-in max-w-xl text-sm text-slate-500 dark:text-slate-400 sm:text-base"
+          style={{ animationDelay: "80ms" }}
+        >
           Every claim below is confirmed by a verified organisation, signed, time-bound and publicly checkable —
           no account, wallet or blockchain knowledge required.
         </p>
-        <SearchBar size="large" />
+        <div className="animate-rise-in flex w-full justify-center" style={{ animationDelay: "180ms" }}>
+          <div className="animate-search-glow w-full max-w-2xl">
+            <SearchBar size="large" autoFocus />
+          </div>
+        </div>
+        {examples.length > 0 && (
+          <div
+            className="animate-rise-in flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400"
+            style={{ animationDelay: "300ms" }}
+          >
+            <span className="text-slate-400 dark:text-slate-500">Try:</span>
+            {examples.map((ex) => (
+              <Link
+                key={ex.to}
+                to={ex.to}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-600 transition hover:border-sky-400 hover:text-sky-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-sky-500 dark:hover:text-sky-400"
+              >
+                {ex.label}
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
+          className="animate-rise-in"
+          style={{ animationDelay: "380ms" }}
           label="Verified organisations"
           value={organisations.length}
           icon={
@@ -48,6 +80,8 @@ export function Home() {
           }
         />
         <StatCard
+          className="animate-rise-in"
+          style={{ animationDelay: "440ms" }}
           label="Verified people"
           value={people.length}
           icon={
@@ -57,6 +91,8 @@ export function Home() {
           }
         />
         <StatCard
+          className="animate-rise-in"
+          style={{ animationDelay: "500ms" }}
           label="Relationship attestations"
           value={relationships.length}
           icon={
@@ -66,6 +102,8 @@ export function Home() {
           }
         />
         <StatCard
+          className="animate-rise-in"
+          style={{ animationDelay: "560ms" }}
           label="Active mandates"
           value={activeMandates}
           icon={
@@ -77,13 +115,13 @@ export function Home() {
       </section>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Panel title="Latest verified organisations">
+        <Panel title="Latest verified organisations" className="animate-rise-in" style={{ animationDelay: "640ms" }}>
           <ul className="divide-y divide-slate-100 dark:divide-slate-800/70">
             {latestOrgs.map((org) => {
               const count = getRelationshipsForOrganisation(org.id).length + getMandatesForOrganisation(org.id).length;
               return (
                 <li key={org.id}>
-                  <Link to={`/org/${org.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
+                  <Link to={`/org/${org.id}`} className="group flex items-center gap-3 px-4 py-3 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
                     <Identicon seed={org.id} size={32} rounded={false} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -94,6 +132,18 @@ export function Home() {
                         Verified {formatDate(org.verifiedAt)} · {count} claims confirmed
                       </div>
                     </div>
+                    <svg
+                      className="shrink-0 text-slate-300 opacity-0 transition group-hover:opacity-100 dark:text-slate-600"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </Link>
                 </li>
               );
@@ -101,14 +151,19 @@ export function Home() {
           </ul>
         </Panel>
 
-        <Panel title="Latest claims" bodyClassName="divide-y divide-slate-100 dark:divide-slate-800/70">
+        <Panel
+          title="Latest claims"
+          className="animate-rise-in"
+          style={{ animationDelay: "720ms" }}
+          bodyClassName="divide-y divide-slate-100 dark:divide-slate-800/70"
+        >
           {latestClaims.map((claim) => (
             <ClaimRow key={claim.id} claim={claim} />
           ))}
         </Panel>
       </section>
 
-      <p className="text-center text-xs text-slate-400">
+      <p className="animate-rise-in text-center text-xs text-slate-400" style={{ animationDelay: "800ms" }}>
         Read live from the{" "}
         <a href={chainConfig.explorerUrl} target="_blank" rel="noreferrer" className="underline hover:text-sky-500">
           registry contract
