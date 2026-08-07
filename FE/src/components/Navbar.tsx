@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { ConnectButton } from "./ConnectButton";
 import { Logo } from "./Logo";
 import { SearchBar } from "./SearchBar";
 import { ThemeToggle } from "./ThemeToggle";
@@ -24,7 +25,11 @@ export function Navbar() {
           <Link to="/" className={`shrink-0 ${introClass}`} aria-label="DoubleCheck home">
             <Logo />
           </Link>
-          <div className={`sm:hidden ${introClass}`} style={intro ? { animationDelay: "120ms" } : undefined}>
+          <div
+            className={`flex items-center gap-2 sm:hidden ${introClass}`}
+            style={intro ? { animationDelay: "120ms" } : undefined}
+          >
+            <ConnectButton />
             <ThemeToggle />
           </div>
         </div>
@@ -39,9 +44,10 @@ export function Navbar() {
         )}
 
         <div
-          className={`ml-auto hidden shrink-0 sm:block ${introClass}`}
+          className={`ml-auto hidden shrink-0 items-center gap-2 sm:flex ${introClass}`}
           style={intro ? { animationDelay: "120ms" } : undefined}
         >
+          <ConnectButton />
           <ThemeToggle />
         </div>
       </div>

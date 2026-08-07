@@ -21,6 +21,8 @@ export interface Registry extends RegistrySnapshot {
   getOrganisation(id: string): Organisation | undefined;
   /** Resolves the public handle used in shareable verification links. */
   getByHandle(handle: string): Organisation | Person | undefined;
+  /** Resolves the Stellar address a badge is soulbound to. Used by `/me`. */
+  getByController(address: string): Organisation | Person | undefined;
   getPerson(id: string): Person | undefined;
   getClaim(id: string): Claim | undefined;
   getRelationship(id: string): Relationship | undefined;
@@ -51,6 +53,12 @@ function buildRegistry(snapshot: RegistrySnapshot, refresh: () => void): Registr
     ...snapshot.organisations.map((o) => [o.handle, o] as const),
     ...snapshot.people.map((p) => [p.handle, p] as const),
   ]);
+  // The snapshot is a complete walk of every entity, so a controller can be
+  // resolved locally — no extra contract round trip for `/me`.
+  const byController = new Map<string, Organisation | Person>([
+    ...snapshot.organisations.map((o) => [o.controller, o] as const),
+    ...snapshot.people.map((p) => [p.controller, p] as const),
+  ]);
   const relById = new Map(snapshot.relationships.map((r) => [r.id, r]));
   const mandateById = new Map(snapshot.mandates.map((m) => [m.id, m]));
 
@@ -62,6 +70,7 @@ function buildRegistry(snapshot: RegistrySnapshot, refresh: () => void): Registr
     refresh,
     getOrganisation: (id) => orgById.get(id),
     getByHandle: (handle) => byHandle.get(handle.toLowerCase()),
+    getByController: (address) => byController.get(address.trim().toUpperCase()),
     getPerson: (id) => personById.get(id),
     getRelationship: (id) => relById.get(id),
     getMandate: (id) => mandateById.get(id),

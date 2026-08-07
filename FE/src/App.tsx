@@ -1,6 +1,8 @@
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { RegistryProvider } from "./data";
+import { WalletProvider } from "./context/WalletContext";
+import { MyRecord } from "./pages/MyRecord";
 import { Home } from "./pages/Home";
 import { Search } from "./pages/Search";
 import { OrgDetail } from "./pages/OrgDetail";
@@ -15,11 +17,15 @@ function App() {
       <Route
         element={
           <RegistryProvider>
-            <Layout />
+            {/* Inside the registry: the wallet UI resolves an address against the snapshot. */}
+            <WalletProvider>
+              <Layout />
+            </WalletProvider>
           </RegistryProvider>
         }
       >
         <Route index element={<Home />} />
+        <Route path="me" element={<MyRecord />} />
         <Route path="search" element={<Search />} />
         <Route path="org/:id" element={<OrgDetail />} />
         <Route path="person/:id" element={<PersonDetail />} />
