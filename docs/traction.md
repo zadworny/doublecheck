@@ -76,7 +76,8 @@ US job listings are ghost jobs.
 Wintrader, Spreadless and Guardian — piloting employee, external-representative and hiring-mandate
 verification on testnet first, then mainnet here. See `Peridot LOI.pdf`.
 
-**Prototype.** A working prototype is live at https://verifiedproto.netlify.app/
+**Prototype.** The working prototype these partners are piloting against is the live verifier above —
+[https://doublecheck-lime.vercel.app](https://doublecheck-lime.vercel.app).
 
 **First issuer.** Jobited, our first verification issuer, is an active EU recruitment operation:
 5,000+ technical professionals, 10+ company relationships and 20+ recruiting mandates managed. It
