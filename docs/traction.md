@@ -68,10 +68,24 @@ recorded in [Architecture](architecture.md#scope). The MVP does one thing.
 
 <!-- TODO: fill in or delete each block below. Do not publish a block you cannot evidence. -->
 
-**Conversations.** _<how many organisations, issuers or recruiters have you spoken to? what did they
-say? one line each is enough — a named quote beats a number>_
+**The problem is large and accelerating.** LinkedIn removed 80.6 million fake accounts in H2 2024.
+US job and employment scam losses rose from $90M in 2020 to $501M in 2024 (FTC). An estimated 27% of
+US job listings are ghost jobs.
 
-**Pipeline.** _<pilots agreed, letters of intent, waitlist signups — with dates>_
+**Pipeline.** 5 signed letters of intent from partner companies — Peridot Finance, Payroutes,
+Wintrader, Spreadless and Guardian — piloting employee, external-representative and hiring-mandate
+verification on testnet first, then mainnet here. See `Peridot LOI.pdf`.
+
+**Prototype.** A working prototype is live at https://verifiedproto.netlify.app/
+
+**First issuer.** Jobited, our first verification issuer, is an active EU recruitment operation:
+5,000+ technical professionals, 10+ company relationships and 20+ recruiting mandates managed. It
+supplies the first verified companies, recruiters and mandates. See `Jobited_DataRoom.pptx`.
+
+**Distribution.** BTC-ECHO, the DACH crypto market leader at 2.75M monthly visits, backs the rollout
+(contact: Jan Heinrich Meyer, meyer@btc-echo.de). [onchainhires.com](https://onchainhires.com), our
+job board, is the first live surface for verified listings. Talks with Cointelegraph for global
+reach are in progress.
 
 **Usage.** _<Vercel analytics: unique visitors and page views since launch, and the window they cover>_
 
