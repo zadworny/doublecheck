@@ -66,8 +66,6 @@ recorded in [Architecture](architecture.md#scope). The MVP does one thing.
 
 ## Demand
 
-<!-- TODO: fill in or delete each block below. Do not publish a block you cannot evidence. -->
-
 **The problem is large and accelerating.** LinkedIn removed 80.6 million fake accounts in H2 2024.
 US job and employment scam losses rose from $90M in 2020 to $501M in 2024 (FTC). An estimated 27% of
 US job listings are ghost jobs.
@@ -88,12 +86,9 @@ supplies the first verified companies, recruiters and mandates. See `Jobited_Dat
 job board, is the first live surface for verified listings. Talks with Cointelegraph for global
 reach are in progress.
 
-**Usage.** _<Vercel analytics: unique visitors and page views since launch, and the window they cover>_
-
-**Repository.** _<GitHub stars, forks, unique clones — only if the number helps you>_
-
-**Recognition.** _<grants, hackathon placements, accelerator or cohort acceptance>_
-
+> Usage, repository and recognition numbers are deliberately absent. The project launched days ago
+> and there is nothing there yet worth reporting.
+>
 > The testnet registry is currently seeded with 5 entities and 8 claims. That is fixture data chosen
 > to exercise every state — company-confirmed, self-asserted, withdrawn and expired — not users. It
 > is not counted as traction here and should not be presented as such.
