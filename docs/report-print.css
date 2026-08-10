@@ -1,0 +1,238 @@
+@page {
+  size: Letter;
+  margin: 0.7in 0.68in 0.72in;
+
+  @bottom-left {
+    content: "DOUBLECHECK  •  STELLAR TESTNET";
+    color: #64748b;
+    font: 600 8px/1.2 Inter, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0.08em;
+  }
+
+  @bottom-right {
+    content: "PAGE " counter(page) " / " counter(pages);
+    color: #64748b;
+    font: 600 8px/1.2 Inter, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0.08em;
+  }
+}
+
+@page :first {
+  margin: 0;
+
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+:root {
+  --ink: #14213d;
+  --muted: #526176;
+  --line: #d8e3ed;
+  --navy: #0b1930;
+  --blue: #087ebf;
+  --cyan: #15b8d6;
+  --ice: #eef8fc;
+  --green: #108466;
+  --green-soft: #eaf8f3;
+  --amber: #a8610a;
+  --amber-soft: #fff6df;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  background: #e8eef4;
+  color: var(--ink);
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  font-size: 10.35pt;
+  line-height: 1.48;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+body {
+  width: 100%;
+  margin: 0 auto;
+  background: white;
+}
+
+body > h1:first-child {
+  position: relative;
+  min-height: 4.25in;
+  margin: 0 0 0.52in;
+  padding: 1.18in 0.78in 0.66in;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 89% 18%, rgba(21, 184, 214, 0.44) 0 9%, transparent 9.5%),
+    radial-gradient(circle at 92% 22%, transparent 0 18%, rgba(21, 184, 214, 0.15) 18.5% 19.5%, transparent 20%),
+    linear-gradient(132deg, #071426 0%, #0b3151 60%, #087ebf 100%);
+  color: white;
+  font-size: 35pt;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1.03;
+}
+
+body > h1:first-child::before {
+  display: block;
+  margin-bottom: 0.55in;
+  color: #6ee7f2;
+  content: "DOUBLECHECK  /  RELEASE REPORT";
+  font-size: 10pt;
+  font-weight: 750;
+  letter-spacing: 0.15em;
+}
+
+body > h1:first-child::after {
+  position: absolute;
+  right: -0.18in;
+  bottom: -0.2in;
+  width: 2.15in;
+  height: 2.15in;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  content: "";
+}
+
+body > p:nth-of-type(-n + 6) {
+  margin: 0 0.78in 0.12in;
+  padding: 0 0 0.1in;
+  border-bottom: 1px solid #dbe8f1;
+  color: #334a62;
+  font-size: 10pt;
+}
+
+body > p:nth-of-type(-n + 6) strong {
+  display: inline-block;
+  min-width: 1.45in;
+  color: var(--navy);
+  font-size: 8.2pt;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+body > h2:first-of-type { break-before: page; }
+
+h2 {
+  margin: 0.12in 0 0.22in;
+  padding: 0.1in 0 0.12in;
+  border-bottom: 2.5px solid var(--cyan);
+  color: var(--navy);
+  font-size: 20pt;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  break-after: avoid;
+}
+
+h2::before {
+  display: inline-block;
+  width: 0.1in;
+  height: 0.26in;
+  margin-right: 0.12in;
+  border-radius: 99px;
+  background: linear-gradient(var(--cyan), var(--blue));
+  content: "";
+  vertical-align: -0.025in;
+}
+
+h3 {
+  margin: 0.25in 0 0.1in;
+  color: #08729f;
+  font-size: 13.5pt;
+  font-weight: 750;
+  line-height: 1.22;
+  break-after: avoid;
+}
+
+p { margin: 0 0 0.13in; orphans: 3; widows: 3; }
+
+a { color: #087ebf; text-decoration: none; }
+
+strong { color: #10263e; }
+
+ul, ol {
+  margin: 0.06in 0 0.18in;
+  padding-left: 0.25in;
+}
+
+li { margin: 0.035in 0; padding-left: 0.035in; }
+li::marker { color: var(--blue); font-weight: 700; }
+
+code {
+  padding: 0.015in 0.045in;
+  border-radius: 4px;
+  background: #edf3f7;
+  color: #075d84;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 8.4pt;
+  overflow-wrap: anywhere;
+}
+
+table {
+  width: 100%;
+  margin: 0.11in 0 0.22in;
+  border: 1px solid var(--line);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 8.75pt;
+  line-height: 1.32;
+  break-inside: auto;
+}
+
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+
+th {
+  padding: 0.085in 0.1in;
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(100deg, #0b3151, #087ebf);
+  color: white;
+  font-size: 8pt;
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+td {
+  padding: 0.075in 0.1in;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th:last-child, td:last-child { border-right: 0; }
+tbody tr:nth-child(even) td { background: #f5f9fc; }
+
+blockquote {
+  margin: 0.17in 0;
+  padding: 0.13in 0.17in;
+  border-left: 4px solid var(--cyan);
+  border-radius: 0 7px 7px 0;
+  background: var(--ice);
+  color: #29465c;
+}
+
+hr {
+  margin: 0.28in 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Make the final safety statement visually unmistakable. */
+h2:last-of-type + p {
+  padding: 0.18in;
+  border: 1px solid #f0d291;
+  border-left: 5px solid #e19a26;
+  border-radius: 8px;
+  background: var(--amber-soft);
+  color: #603e12;
+}
+
+@media print {
+  html, body { background: white; }
+  h2, h3, table, blockquote { break-inside: avoid-page; }
+}
