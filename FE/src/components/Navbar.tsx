@@ -10,7 +10,10 @@ let introPlayed = false;
 
 export function Navbar() {
   // Home already leads with the large hero search — don't stack a second one here.
-  const isHome = useLocation().pathname === "/";
+  const { pathname } = useLocation();
+  const routePath = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  const isHome = routePath === "/";
+  const isRegistryIndependent = routePath === "/apply" || routePath === "/standard";
 
   const [intro] = useState(!introPlayed);
   useEffect(() => {
@@ -34,7 +37,14 @@ export function Navbar() {
           </div>
         </div>
 
-        {!isHome && (
+        <nav className="flex items-center gap-1 overflow-x-auto sm:hidden" aria-label="Primary navigation">
+          <NavLink to="/verify" active={routePath === "/verify"}>Check mandate</NavLink>
+          <NavLink to="/apply" active={routePath === "/apply"}>Get verified</NavLink>
+          <NavLink to="/manage" active={routePath === "/manage"}>Manage</NavLink>
+          <NavLink to="/standard" active={routePath === "/standard"}>Our standard</NavLink>
+        </nav>
+
+        {!isHome && !isRegistryIndependent && (
           <div
             className={`flex-1 sm:max-w-md sm:flex-none md:max-w-lg lg:max-w-xl ${introClass}`}
             style={intro ? { animationDelay: "60ms" } : undefined}
@@ -47,10 +57,32 @@ export function Navbar() {
           className={`ml-auto hidden shrink-0 items-center gap-2 sm:flex ${introClass}`}
           style={intro ? { animationDelay: "120ms" } : undefined}
         >
+          <nav className="flex items-center gap-1" aria-label="Primary navigation">
+            <NavLink to="/verify" active={routePath === "/verify"}>Check mandate</NavLink>
+            <NavLink to="/apply" active={routePath === "/apply"}>Get verified</NavLink>
+            <NavLink to="/manage" active={routePath === "/manage"}>Manage</NavLink>
+            <NavLink to="/standard" active={routePath === "/standard"}>Our standard</NavLink>
+          </nav>
           <ConnectButton />
           <ThemeToggle />
         </div>
       </div>
     </header>
+  );
+}
+
+function NavLink({ to, active, children }: { to: string; active: boolean; children: string }) {
+  return (
+    <Link
+      to={to}
+      aria-current={active ? "page" : undefined}
+      className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+        active
+          ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
+          : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }

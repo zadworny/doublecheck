@@ -1,4 +1,4 @@
-export function VerifiedBadge({ issuer }: { issuer?: string }) {
+export function VerifiedBadge({ issuer, label = "Verified" }: { issuer?: string; label?: string }) {
   return (
     <span
       title={issuer ? `Identity verified by ${issuer}` : "Identity verified"}
@@ -7,7 +7,7 @@ export function VerifiedBadge({ issuer }: { issuer?: string }) {
       <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 2 4 5.5v6c0 5.25 3.4 9.6 8 10.5 4.6-.9 8-5.25 8-10.5v-6L12 2Zm-1.2 14-3.8-3.8 1.4-1.4 2.4 2.4 5.4-5.4 1.4 1.4-6.8 6.8Z" />
       </svg>
-      Verified
+      {label}
     </span>
   );
 }

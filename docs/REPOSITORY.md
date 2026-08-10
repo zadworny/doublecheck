@@ -1,102 +1,121 @@
 # Repository guide
 
-DoubleCheck is a small monorepo with two deployable components and a flat documentation set. The
-top-level split is intentional: the contract and the explorer have different toolchains, release
-cycles, and runtime environments, while the documentation explains the boundary between them.
+DoubleCheck is a small monorepo with one Soroban contract, a browser application, and a request-driven
+intake function. They share a frontend package but have different trust and secret boundaries.
 
 ## Top-level map
 
-| Path | Purpose | Notes |
-|---|---|---|
-| [`SC/`](../SC/) | Soroban registry contract, written in Rust | The ledger source of truth; builds to Wasm and is deployed to Stellar. |
-| [`FE/`](../FE/) | Public React + Vite verifier | A static, read-only browser application; it talks directly to Stellar RPC. |
-| [`docs/`](./) | Project, technical, operational, and product documentation | Kept flat for easy GitHub and GitBook browsing. |
-| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Pull-request and `main` checks | Independently validates the contract and explorer. |
-| [`README.md`](../README.md) | Short project introduction | The best entry point for a new reader. |
-| [`SUMMARY.md`](../SUMMARY.md) | GitBook navigation | Keep it in sync when adding a permanent document. |
-| [`SECURITY.md`](../SECURITY.md) | Vulnerability reporting and scope | Read before creating a public security issue. |
+| Path | Responsibility |
+|---|---|
+| [`SC/`](../SC/) | Rust/Soroban registry, tests, event snapshots, and keeper runner |
+| [`FE/`](../FE/) | React/Vite application, generated contract client, Vercel API, validation tests |
+| [`docs/`](./) | Architecture, development, deployment, roadmap, and project evidence |
+| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | contract and frontend/API checks |
+| [`README.md`](../README.md) | short project introduction and source-vs-live status |
+| [`SUMMARY.md`](../SUMMARY.md) | GitBook navigation |
+| [`SECURITY.md`](../SECURITY.md) | private reporting and accepted security boundary |
+
+The future private review system and event indexer/API are not present in this repository.
 
 ## Contract source map
 
-The contract lives at `SC/contracts/doublecheck-registry/`.
+Contract root: `SC/contracts/doublecheck-registry/`.
 
 | Path | Responsibility |
 |---|---|
-| `src/lib.rs` | Public contract entry points, authorisation checks, state transitions, and derived-status reads. |
-| `src/types.rs` | Soroban contract types, enums, storage keys, field limits, and error codes. |
-| `src/storage.rs` | Persistent and instance storage access, indexes, and time-to-live bookkeeping. |
-| `src/events.rs` | Event definitions consumed by a future indexer. |
-| `src/test.rs` | Behavioural and regression tests for the registry's trust rules. |
-| `test_snapshots/` | Checked-in event snapshots asserted by the Soroban test suite. |
+| `src/lib.rs` | entry points, auth, validations, transitions, and effective reads |
+| `src/types.rs` | public records/enums, storage keys, limits, and errors |
+| `src/storage.rs` | instance/persistent storage, indexes, reservations, and TTL extension |
+| `src/events.rs` | proposal, consent, metadata, claim, status, governance, and upgrade events |
+| `src/test.rs` | behavioural/adversarial trust regression suite |
+| `test_snapshots/` | generated and committed event snapshots reviewed with test changes |
+| `SC/scripts/keepalive.sh` | signed cursor loop for preventative TTL maintenance |
 
-The workspace manifest is `SC/Cargo.toml`; the pinned Rust channel and Wasm target are in
-`SC/rust-toolchain.toml`. Generated build output belongs under `SC/target/` and is ignored.
+`SC/target/` is generated/ignored. The optimized deploy candidate is built through Stellar CLI; CI's
+release build additionally enforces the network byte limit.
 
-## Explorer source map
-
-The explorer lives at `FE/` and is a single-page application.
+## Browser application source map
 
 | Path | Responsibility |
 |---|---|
-| `src/App.tsx` | Route table and top-level providers. |
-| `src/pages/` | Route-level views: home, records, claims, search, current wallet record, and 404. |
-| `src/components/` | Reusable visual and interaction components. |
-| `src/data/registry.ts` | Converts contract records to the UI's models and loads the registry snapshot. |
-| `src/data/RegistryContext.tsx` | Makes that snapshot and its lookups available to pages. |
-| `src/contract/registry.ts` | Generated TypeScript client for the deployed contract; never edit it by hand. |
-| `src/lib/chain.ts` | Browser-side RPC client, public network configuration, and timestamp helpers. |
-| `src/context/` | Theme, toast, and wallet presentation state. |
-| `scripts/generate-bindings.mjs` | Repeatable binding generation plus project-specific TypeScript compatibility patches. |
-| `vercel.json` | SPA fallback and asset caching for Vercel. |
+| `FE/src/App.tsx` | route order and top-level providers |
+| `FE/src/pages/` | public explorer, direct verifier, live badge, application, wallet record/console |
+| `FE/src/components/` | status/provenance, credential, sharing, reporting, and common UI |
+| `FE/src/data/registry.ts` | generated contract records → public display models; privacy filtering |
+| `FE/src/data/RegistryContext.tsx` | refreshable registry snapshot and lookups |
+| `FE/src/lib/chain.ts` | network configuration and read client |
+| `FE/src/lib/credential.ts` | bounded HTTPS fetch, canonicalisation, and SHA-256 comparison |
+| `FE/src/lib/intake.ts` | application/report client and honest response handling |
+| `FE/src/lib/write.ts` | Freighter controller checks, canonical statements, simulation/sign/send/finality |
+| `FE/src/context/WalletContext.tsx` | optional public wallet connection state |
+| `FE/src/contract/registry.ts` | generated live-ABI client; never hand-edit |
+| `FE/scripts/generate-bindings.mjs` | repeatable live specification generation/compatibility patches |
+| `FE/vercel.json` | SPA/function routing assumptions, security headers, cache policy |
 
-`FE/.env.example` documents optional browser-safe runtime configuration. Do not add secrets to it or
-to `VITE_*` variables: Vite exposes those values in the built client bundle.
+Important routes include `/apply`, `/verify`, `/badge/:handle`, `/me`, `/manage`, `/standard`, and
+public record/claim paths. The generic `/:handle` matcher must remain after static and prefixed
+routes.
 
-## Boundaries that should stay explicit
+The live badge is not a static image. It is a small iframe page that refreshes registry state; other
+HTML/Markdown carriers are neutral links. Public data loading must never re-introduce a relationship
+whose `public_display` is false.
 
-| Concern | Owner | Reason |
+## Intake function source map
+
+| Path | Responsibility |
+|---|---|
+| `FE/api/intake.ts` | Vercel HTTP method/content/byte checks, secure forwarding, references/errors |
+| `FE/server/intake-validation.ts` | strict application/report schemas and sanitisation |
+| `FE/server/*.test.ts` | Node-native intake and credential regression tests |
+| `FE/.env.example` | public chain configuration and named server-only webhook variables |
+
+Browser `VITE_*` values are public. `INTAKE_WEBHOOK_URL` and
+`INTAKE_WEBHOOK_BEARER_TOKEN` are runtime secrets and must exist only in the function environment.
+The API stores nothing and writes nothing on-chain; the webhook/review system owns durable private
+records.
+
+## Ownership boundaries
+
+| Concern | Owner |
+|---|---|
+| verification validity, consent, signer provenance, status authority | contract |
+| public discovery/rendering and local dependency explanation | frontend data/UI |
+| transaction statement review and wallet/network/finality checks | wallet client plus contract |
+| applications, raw reports, KYC/KYB evidence, policies, appeals | private off-chain operation |
+| event history, scalable discovery, reconciliation | future indexer/API |
+| TTL survival | signed keeper/restore operation; never simulated browser reads |
+
+See [Architecture](architecture.md) for the rationale.
+
+## Generated, local, and secret files
+
+| Kind | Examples | Rule |
 |---|---|---|
-| Validity, authorisation, confirmation tier, and lifecycle | Contract | These are the trust assertions a reader must be able to verify independently. |
-| Record discovery and display models | Explorer data layer | Keeps generated SDK types out of page components and allows an indexer to replace the MVP loader. |
-| Verification evidence, complaint intake, billing, and search infrastructure | Off-chain systems | These need privacy, moderation, or flexible querying; only their reviewed outcomes belong on-chain. |
-| Long-lived architectural and operational explanations | `docs/` | Makes critical choices discoverable without duplicating source code. |
+| Generated and committed | `FE/src/contract/registry.ts`, Soroban snapshots | regenerate via documented workflow; review diffs |
+| Generated and ignored | `SC/target/`, `FE/dist/`, `FE/node_modules/` | never commit |
+| Local deployment state | `FE/.env`, `.stellar/`, `.vercel/` | never commit |
+| Public example | `FE/.env.example` | names secrets but contains no secret value |
 
-The detailed rationale for this division is in [Architecture](architecture.md#the-on-chain-boundary).
+The checked-in generated binding targets the vNext public testnet ABI deployed on 10 August 2026.
+Future source changes still do not update it automatically: regenerate only after the exact candidate
+is live and final.
 
-## Generated, local, and ignored files
+## Release boundary
 
-| Kind | Examples | Handling |
-|---|---|---|
-| Generated and committed | `FE/src/contract/registry.ts`, `SC/test_snapshots/` | Regenerate through the documented tool or test workflow; review the diff as source-derived output. |
-| Generated and ignored | `SC/target/`, `FE/dist/`, `FE/node_modules/` | Never commit. Recreate locally or in CI. |
-| Local configuration | `FE/.env`, `.stellar/`, `.vercel/` | Never commit; these can contain deployment-specific details or credentials. |
-| Public examples | `FE/.env.example` | Keep accurate, safe to expose, and aligned with browser defaults. |
+A merge, contract deployment/upgrade, binding regeneration, frontend deploy, webhook configuration,
+and operational activation are distinct actions. The supported environment is the tuple:
 
-The root `.gitignore` also excludes loose root PDFs to prevent accidental inclusion of source
-materials in this public repository. Project documentation belongs in `docs/`.
+```text
+commit + Wasm hash + contract id/network + live ABI/binding
+       + browser environment + server secret environment + release evidence
+```
+
+Follow [Development](DEVELOPMENT.md) for changes and [Deployment](deployment.md) for release/TTL
+operations. Never advertise source-only rules as live guarantees.
 
 ## Documentation conventions
 
-Keep documentation in the flat `docs/` directory. Use uppercase filenames for new enduring project
-guides (for example, `DEVELOPMENT.md`) and concise lowercase names for established topic pages that
-already follow that convention (for example, `architecture.md`). Do not rename existing documents
-solely for casing consistency; stable links are more valuable.
-
-When adding a document:
-
-1. Link it from [`docs/README.md`](README.md).
-2. Add it to [`SUMMARY.md`](../SUMMARY.md) when it belongs in GitBook navigation.
-3. Prefer source-relative links that work in GitHub and GitBook.
-4. Mark changing network details, production claims, and future work clearly; do not turn testnet
-   examples into production assurances.
-
-## Release and review model
-
-The contract and explorer are reviewed and built independently in CI. A push to `main` runs Rust
-formatting, Clippy, tests, a Wasm build and size check for `SC/`, plus oxlint and the production
-TypeScript/Vite build for `FE/`. See [Development](DEVELOPMENT.md#checks-before-a-pull-request) for
-the exact commands.
-
-Publishing the static explorer and deploying/upgrading the contract are separate operational actions
-from merging code. Follow [Deployment](deployment.md) and the mainnet prerequisites in
-[Roadmap](roadmap.md) before treating a merge as a production release.
+Keep durable documents in this flat directory, link them from [`docs/README.md`](README.md), and add
+them to [`SUMMARY.md`](../SUMMARY.md) when appropriate. Prefer relative links. Mark facts as source,
+legacy testnet, planned, or production. Update security/architecture when auth/privacy changes and
+deployment when ABI/environment/operations change.

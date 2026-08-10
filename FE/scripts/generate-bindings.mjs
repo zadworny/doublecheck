@@ -72,6 +72,10 @@ export * as contract from "@stellar/stellar-sdk/contract";
 export * as rpc from "@stellar/stellar-sdk/rpc";`,
   );
 
+  // The live spec's documentation may contain whitespace-only Markdown
+  // lines. Keep generated output compatible with `git diff --check`.
+  src = src.replace(/[ \t]+$/gm, "");
+
   // 3. Mark the file so nobody hand-edits it.
   src =
     `/* eslint-disable */

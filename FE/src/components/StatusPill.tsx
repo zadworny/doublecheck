@@ -6,6 +6,9 @@ const STATUS_STYLES: Record<string, string> = {
   Suspended: "bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-amber-500/20",
   Withdrawn: "bg-orange-500/10 text-orange-700 dark:text-orange-400 ring-orange-500/20",
   Disputed: "bg-red-500/10 text-red-700 dark:text-red-400 ring-red-500/20",
+  Scheduled: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 ring-indigo-500/20",
+  Proposed: "bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-amber-500/20",
+  Unavailable: "bg-red-500/10 text-red-700 dark:text-red-400 ring-red-500/20",
 };
 
 const DOT_STYLES: Record<string, string> = {
@@ -16,6 +19,9 @@ const DOT_STYLES: Record<string, string> = {
   Suspended: "bg-amber-500",
   Withdrawn: "bg-orange-500",
   Disputed: "bg-red-500",
+  Scheduled: "bg-indigo-500",
+  Proposed: "bg-amber-500",
+  Unavailable: "bg-red-500",
 };
 
 interface StatusPillProps {

@@ -34,7 +34,7 @@ export type MandateType =
  * `ClaimStatus`; `Expired` is derived from the end date at read time and is
  * never written.
  */
-export type ClaimStatus =
+export type LedgerClaimStatus =
   | "Active"
   | "Ended"
   | "Suspended"
@@ -42,6 +42,15 @@ export type ClaimStatus =
   | "Disputed"
   | "Completed"
   | "Expired";
+
+/**
+ * UI-only states that need more context than the claim record itself carries.
+ *
+ * `Scheduled` applies before a mandate's `valid_from`. `Unavailable` means the
+ * mandate record itself may still say Active, but one of the facts it depends
+ * on (an entity badge or its public relationship) is not currently usable.
+ */
+export type ClaimStatus = LedgerClaimStatus | "Scheduled" | "Proposed" | "Unavailable";
 
 /** Kept as separate names because the two record kinds read differently. */
 export type RelationshipStatus = ClaimStatus;
@@ -66,7 +75,8 @@ export const CONFIRMATION_LABEL: Record<Confirmation, string> = {
 
 export interface StatusEvent {
   status: string;
-  at: string;
+  /** Null until an event indexer can prove the exact transition time. */
+  at: string | null;
   note?: string;
 }
 
@@ -134,13 +144,38 @@ export interface Relationship extends ClaimBase {
 export interface Mandate extends ClaimBase {
   kind: "mandate";
   representativeId: string;
-  /** Claim id of the relationship this rests on, or `null` if standalone. */
+  /** Public supporting relationship id; hidden/missing/standalone are `null`. */
   relationshipId: string | null;
   mandateType: MandateType;
   scope: string;
   territory?: string;
   validFrom: string;
   validTo: string;
+  /** Status derived from the mandate record alone, before dependencies. */
+  ledgerStatus: LedgerClaimStatus;
+  /** Candidate-facing evaluation across dates, both badges, and relationship. */
+  evaluation: MandateEvaluation;
+}
+
+export type MandateEvaluationCode =
+  | "live"
+  | "scheduled"
+  | "expired"
+  | "claim-inactive"
+  | "organisation-inactive"
+  | "representative-inactive"
+  | "relationship-missing"
+  | "relationship-inactive";
+
+export interface MandateEvaluation {
+  code: MandateEvaluationCode;
+  /** True only when every on-chain dependency is usable at the snapshot time. */
+  live: boolean;
+  reasons: string[];
+  organisationStatus: EntityStatus | "Missing";
+  representativeStatus: EntityStatus | "Missing";
+  relationshipStatus: ClaimStatus | "Missing" | "NotRequired";
+  evaluatedAt: string;
 }
 
 export type Claim = Relationship | Mandate;

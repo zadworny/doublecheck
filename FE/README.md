@@ -1,131 +1,204 @@
-# DoubleCheck explorer
+# DoubleCheck frontend
 
-The public verifier: a React and Vite application that reads the registry contract on Stellar and
-renders organisations, people, relationships and mandates.
+The React/Vite application provides wallet-free public verification, a live embeddable badge,
+manual-verification/report intake, and an expert Freighter holder dashboard for selected writes. A
+Vercel Node function forwards private intake to a server-only webhook; intake is never written to
+Stellar.
 
-There is no backend. Every record on screen comes from a *simulated* contract read issued directly
-from the browser — no transaction, no signature, no fee, and nothing for the reader to install. The
-product depends on that property: someone checking a counterparty cannot be asked to obtain a wallet
-first.
+## Compatibility status
 
-## Running it
+`src/contract/registry.ts` is generated from the current public testnet contract at
+`CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP`. That address was upgraded to vNext on
+10 August 2026; the checked-in binding was regenerated afterward from its live specification.
+
+Frontend dependency checks explain contract decisions but do not replace them. Future contract
+changes require another deploy, live-spec binding regeneration, rebuild, and read/write smoke test.
+
+## Run and check
 
 ```bash
+cd FE
 npm install
 npm run dev
-```
 
-No configuration is required; the deployed testnet contract id is compiled into the generated
-bindings. To target a different deployment, copy `.env.example` to `.env`:
-
-| Variable | Default |
-|---|---|
-| `VITE_CONTRACT_ID` | the testnet deployment |
-| `VITE_RPC_URL` | `https://soroban-testnet.stellar.org` |
-| `VITE_NETWORK_PASSPHRASE` | `Test SDF Network ; September 2015` |
-
-Vite inlines `VITE_*` variables at build time, so changing one has no effect until the next build.
-
-```bash
-npm run build     # tsc -b && vite build  ->  dist/
-npm run preview
+npm test
 npm run lint
-npm run bindings  # regenerate the contract client
+npm run build
+npm run preview
 ```
 
-Hosting is covered in [`docs/deployment.md`](../docs/deployment.md).
+Plain `npm run dev` starts Vite only. Public reads work, but `/api/intake` requires `vercel dev` or a
+deployed Vercel preview.
 
-## How data reaches the page
+Public browser configuration:
 
-```
-src/contract/registry.ts      generated from the deployed contract — not hand-edited
-src/lib/chain.ts              client construction, RPC config, bigint and timestamp helpers
-src/data/registry.ts          contract records -> the shapes the UI renders
-src/data/RegistryContext.tsx  loads once, exposes synchronous lookups to the pages
-```
-
-Soroban offers no query language: a key can be read, but the storage cannot be enumerated. The
-contract assigns sequential ids and exposes `entity_count` and `claim_count`, so a full snapshot is a
-walk from 1 to N — roughly a dozen reads at present size. `RegistryProvider` performs that walk once
-on mount and hands the pages a plain in-memory snapshot, which is why every page below it remains
-synchronous and the application has exactly one loading state.
-
-This does not scale, by design. Beyond a few hundred records it should be replaced by an indexer
-following the contract's events (`EntityRegistered`, `RelationshipAttested`, `MandateIssued`,
-`ClaimStatusSet`, …). Nothing above `src/data/` would need to change.
-
-### Record mapping
-
-| Contract | UI |
+| Variable | Default/purpose |
 |---|---|
-| `Entity` with `kind: Organisation` | `Organisation` |
-| `Entity` with `kind: Person` | `Person` |
-| `Relationship`, `Mandate` | same, as a `Claim` union |
-| `RelationshipType`, `MandateType` | identical string unions |
-| `ClaimStatus` (numeric enum) | string union, with `Expired` derived |
-| `u64` ids | decimal strings, used directly as route segments |
-| `issuer: Address` | rendered as the signing key, not a name |
-| `confirmation` | the "Self-asserted" / "Confirmed by the organisation" label |
-| `bigint` Unix seconds | ISO strings for the date formatters |
+| `VITE_CONTRACT_ID` | vNext public testnet registry |
+| `VITE_RPC_URL` | `https://soroban-testnet.stellar.org` |
+| `VITE_NETWORK_PASSPHRASE` | Stellar testnet passphrase |
 
-### Routes
+Vite compiles these into public JavaScript. Rebuild after changing them and keep all three on the
+same network.
 
-| Path | Renders |
+Server-only intake configuration:
+
+| Variable | Purpose |
 |---|---|
-| `/<handle>` | the canonical shareable verification link |
-| `/org/:id`, `/person/:id` | the same pages, addressed by entity id |
-| `/tx/:id` | a relationship or mandate |
-| `/search?q=` | search across names, handles, domains and claim ids |
+| `INTAKE_WEBHOOK_URL` | credential-free HTTPS destination for the private review system |
+| `INTAKE_WEBHOOK_BEARER_TOKEN` | optional bearer credential sent by the function |
 
-`/<handle>` is registered last, so every static path and prefixed route matches first.
+Never prefix the private variables with `VITE_`.
 
-### Sharing
+## Routes
 
-`SharePanel` generates the three carriers that get a reader to a verification: the handle link, a QR
-code, and HTML/Markdown embeds. The QR is built locally in `src/lib/qr.ts` and rendered as SVG so it
-stays sharp in print and can be downloaded without rasterisation.
+| Path | Surface |
+|---|---|
+| `/<handle>` | canonical shareable public record |
+| `/org/:id`, `/person/:id`, `/tx/:id` | public entity and claim detail |
+| `/verify` | organisation/representative pair mandate verifier |
+| `/badge/:handle` | compact, no-store live iframe target |
+| `/search?q=` | public discovery |
+| `/apply` | recruiter, agency, or hiring-company application |
+| `/me` | connected controller's public record |
+| `/manage` | expert/testnet Freighter holder claim dashboard |
+| `/standard` | plain-language verification and privacy standard |
 
-Embeds carry a *link*, never a rendered verdict — a static "verified" image would keep asserting
-itself after a revocation.
+The generic `/:handle` route must remain last. Direct navigation/refresh depends on the SPA fallback
+in `vercel.json`; verify that `/api/intake` still resolves to the function rather than the fallback.
 
-### Two values are computed here rather than fetched
+## Public data path
 
-**Expiry.** The contract derives `Expired` at read time from a record's end date rather than storing
-it. The same rule is reimplemented in `src/data/registry.ts` so a page render does not cost an extra
-round trip per record. The contract remains authoritative — if that rule changes in `lib.rs`, it must
-change here too.
+```text
+src/contract/registry.ts      generated deployed-ABI client; never hand-edit
+src/lib/chain.ts              contract/network/RPC configuration and read helper
+src/data/registry.ts          chain records → UI models, effective status, privacy filtering
+src/data/RegistryContext.tsx  snapshot, lookups, 60-second/visibility refresh
+```
 
-**Status history.** The contract emits an event on every change but stores no timeline, so the status
-history panel shows only what a record itself proves. An indexer would populate it properly.
+The MVP walks `entity_count` and `claim_count` and fetches records into memory. It filters
+relationships whose `public_display` is false before they enter public snapshots, direct claim
+lookups, search, or feeds. This is intentionally small-scale; production needs an event indexer/API
+with reconciliation and pagination.
 
-## Regenerating the bindings
+Expiry is evaluated from the contract's ledger timestamp rather than the visitor's device clock. The
+contract remains authoritative. The direct verifier requires active badges, dates, confirmed mandate
+provenance, and any linked public relationship to agree before showing a positive result. The direct
+pair check reads the deployed vNext contract before showing the strongest verdict.
 
-After redeploying the contract to a new address, or changing its interface:
+## Live distribution
+
+`SharePanel` creates:
+
+- a stable handle link;
+- a locally generated/downloadable SVG QR code;
+- a live iframe pointed at `/badge/<handle>`; and
+- neutral HTML/Markdown links for environments that cannot embed an iframe.
+
+The iframe loads the current snapshot, labels testnet as non-production, and its response
+is `no-store`. Link snippets do not contain a static “verified” claim, so they do not continue
+asserting success after expiry/revocation. `vercel.json` permits external framing only for the badge
+route; normal and wallet-write routes use same-origin frame protection. Test both boundaries under
+the production CSP/cache headers.
+
+## Credential anchor check
+
+`CredentialPanel` performs a user-initiated fetch of a public credential only when:
+
+- the URI is HTTPS with no embedded credentials;
+- the response is successful and no more than 512 KiB; and
+- the raw bytes or canonical JSON SHA-256 matches the on-chain metadata anchor.
+
+For an IPFS anchor, private disclosure, or a host the browser cannot reach safely, the reader can
+select a credential file and compare it locally without uploading it or contacting the anchored URI.
+Both paths enforce the 512 KiB cap. Manual fetching avoids silently revealing every visitor's IP to
+the credential host. A matching hash proves integrity relative to the anchor only. It does **not**
+verify a W3C VC proof suite, issuer signature/key status, holder presentation, revocation registry,
+or selective-disclosure proof.
+
+## Application and report intake
+
+`/apply` stages manual review for recruiter, agency, and hiring-company roles. It collects a
+contract-compatible preferred handle, role-aware organisation/person details and readiness evidence,
+an optional connected Stellar controller, and terms/privacy/accuracy consent. Its copy is explicit
+that submission stays off-chain and is not a badge, approval, or blockchain transaction. A proposed
+C… smart-account controller is accepted for assisted onboarding, but the current Freighter console
+supports G… accounts only and says so before submission.
+
+Report dialogs submit target entity/claim identifiers, category, detail, required contact email,
+optional evidence URL, and privacy consent. Raw allegations remain private until a reviewed outcome
+is written by an authorised contract role.
+
+```text
+Apply / ReportModal → src/lib/intake.ts → POST api/intake.ts
+                    → server/intake-validation.ts → private HTTPS webhook
+```
+
+The function accepts only JSON, caps bodies at 16 KiB, applies strict field allowlists and
+sanitisation, validates URLs/controllers, and checks a honeypot. It returns a reference and `202` only
+after a successful webhook response. Missing configuration returns `503`; downstream rejection or
+unavailability returns `502`. The UI must preserve those honest errors and never manufacture a
+reference. Each forwarded envelope includes the server-controlled policy version
+`doublecheck-intake-2026-08-10` so the review queue can retain the exact consent context.
+
+`npm test` covers server validation and credential helpers without contacting the network. The
+repository does not contain the durable review queue, encrypted evidence vault, reviewer access
+control, KYC/KYB providers, decisions, notifications, policy, or appeals system.
+
+## Holder wallet dashboard
+
+`/manage` is an expert/testnet holder path using Freighter. It resolves the connected address to an
+existing controller and supports:
+
+- organisation- or person-initiated relationship attestations;
+- organisation-confirmed mandates for a person or agency, or representative-self-asserted mandates;
+- person-controlled opt-in/opt-out of official relationship listings, without calling the public
+  Soroban record private;
+- withdrawals of the holder's relationship/mandate claims; and
+- holder-scoped index/direct reads so an unpublished relationship can still be
+  challenged/withdrawn. Those records remain public on Stellar even when omitted from the verifier.
+
+Before signing, `src/lib/write.ts` normalises bounded inputs, builds an exact human statement and
+canonical JSON detail hash, pins the configured contract/network/controller, simulates the call, and
+rejects unexpected extra signers. It then asks Freighter to sign/send and reports success only after
+the RPC returns final ledger success, hash, and ledger number. Secret keys never enter the app.
+
+This is not passkey account abstraction, fee sponsorship, or a full production console. Users need
+Freighter, the correct funded network account, and fees. Issuer proposals/renewals/metadata/status,
+arbiter outcomes, controller
+acceptance/rotation, archived-footprint recovery, robust retry/replacement, and policy-gated operator
+workflows remain to build.
+
+Application and standard pages sit outside the registry-loading boundary, so a public RPC outage
+does not prevent a prospective user from applying or reading the rules. Chain-backed verifier and
+holder routes still fail closed when the registry cannot be read.
+
+## Regenerate bindings
+
+Generate only after the intended contract deployment/upgrade is final:
 
 ```bash
-npm run bindings
-CONTRACT_ID=C… STELLAR_NETWORK=mainnet npm run bindings
+cd FE
+CONTRACT_ID=<vnext-contract-id> STELLAR_NETWORK=testnet npm run bindings
+npm test
+npm run lint
+npm run build
 ```
 
-`scripts/generate-bindings.mjs` runs the Stellar CLI and patches the places where the official output
-does not satisfy this project's TypeScript configuration. Those patches live in the script, so they
-survive regeneration; the comment at its head explains each one.
+`scripts/generate-bindings.mjs` invokes Stellar CLI and applies documented TypeScript compatibility
+patches. Review the generated diff. An in-place address-preserving upgrade still requires generation
+when the ABI changed.
 
-An in-place `upgrade()` keeps the same contract address, so regeneration is only needed when the
-interface itself changes.
+## Production gaps
 
-## Not implemented
+- deploy/upgrade vNext and regenerate the live binding;
+- independent security review and wallet transaction UX audit;
+- complete issuer/arbiter/controller-consent dashboards;
+- real KYC/KYB review/evidence/policy/appeals operations;
+- proof-suite and selective-disclosure credential verification;
+- indexer/API, production RPC, extension, and status history;
+- passkey recovery and fee sponsorship; and
+- monitored submitted keepalive/archive restore operations.
 
-The application is read-only.
-
-**Report** opens a modal that submits nowhere. Complaints belong in an off-chain review queue, and
-only the *outcome* of that review is ever written on-chain, via `add_strike` or `set_entity_status`.
-See [the on-chain boundary](../docs/architecture.md#the-on-chain-boundary).
-
-**Writing claims** — registering entities, attesting relationships, issuing mandates — is done with
-the Stellar CLI; see [`SC/README.md`](../SC/README.md).
-
-**Person records display a handle rather than a name**, because natural persons are registered with
-an empty `display_name`. The name is served from the off-chain credential at `metadata_uri` so that it
-remains erasable, and the on-chain `metadata_hash` proves which version was served. See
-[Personal data](../docs/architecture.md#personal-data).
+See [`docs/deployment.md`](../docs/deployment.md) and
+[`docs/roadmap.md`](../docs/roadmap.md).

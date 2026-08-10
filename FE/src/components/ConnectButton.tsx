@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useWallet } from "../context/WalletContext";
-import { useRegistry } from "../data";
+import { useOptionalRegistry } from "../data";
 import { Identicon } from "./Identicon";
 import { FREIGHTER_URL, walletErrorMessage } from "../lib/wallet";
 
@@ -13,12 +13,12 @@ import { FREIGHTER_URL, walletErrorMessage } from "../lib/wallet";
  */
 export function ConnectButton() {
   const { address, connecting, failure, available, connect, disconnect } = useWallet();
-  const { getByController } = useRegistry();
+  const registry = useOptionalRegistry();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const me = address ? getByController(address) : undefined;
+  const me = address ? registry?.getByController(address) : undefined;
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -106,7 +106,7 @@ export function ConnectButton() {
             }}
             className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800/70"
           >
-            {me ? "View my record" : "No record found"}
+            {registry ? (me ? "View my record" : "No record found") : "View my record"}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

@@ -1,256 +1,242 @@
 # DoubleCheck registry contract
 
-A Soroban contract holding a public registry of verified organisations and people, the relationships
-between them, and the time-bound mandates that authorise someone to act on an organisation's behalf.
+The Soroban registry records vetted organisations and people, their relationships, and time-bound
+mandates to act for an organisation. The contract derives expiry at read time and preserves who
+signed every claim.
 
-Reads are free and require no wallet: the verifier simulates them from the browser, so a person
-checking a counterparty needs no account, no key and no prior setup.
+Design rationale is in [`docs/architecture.md`](../docs/architecture.md); production operations are
+in [`docs/deployment.md`](../docs/deployment.md).
 
-Design rationale — the data model, the trust model, and where the on-chain boundary falls — is in
-[`docs/architecture.md`](../docs/architecture.md).
+## Version status
 
-## Status
+| Version | Status |
+|---|---|
+| Repository vNext | 59 contract tests pass; optimized Wasm is 60,131 bytes |
+| Public testnet | vNext at `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP`, Wasm hash `1ab20ff8c30b0f704b64dee4aed5d1dd111e5b24e33fb612ef9309aef5dc895a` |
+| Frontend binding | Generated from the upgraded live vNext specification |
 
-MVP. 30 tests passing, 38 KB Wasm against a 128 KB network limit, deployed to testnet. **Not
-audited**; see [`SECURITY.md`](../SECURITY.md) and [`docs/roadmap.md`](../docs/roadmap.md).
+The public testnet runs vNext, but the contract has not received an independent production audit and
+the demonstration records do not prove the quality of off-chain verification.
 
 ## Layout
 
-```
+```text
 contracts/doublecheck-registry/src/
-  lib.rs        contract entry points and authorisation rules
-  types.rs      data model — Entity, Relationship, Mandate, Check
-  storage.rs    storage access and TTL/rent bookkeeping
-  events.rs     the event stream an indexer consumes
-  test.rs       test suite
+  lib.rs       entry points and authorisation rules
+  types.rs     public records, enums, keys, and errors
+  storage.rs   persistent storage, indexes, and TTL extension
+  events.rs    indexer-facing event definitions
+  test.rs      behavioural and adversarial tests
+scripts/
+  keepalive.sh signed, cursor-based TTL maintenance loop
 ```
 
 ## Build and test
 
-Requires the Rust toolchain and the [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/install-cli).
+Install Rust, the `wasm32v1-none` target, and Stellar CLI 27.x or a compatible release.
 
 ```bash
 rustup target add wasm32v1-none
-brew install stellar-cli          # or: cargo install --locked stellar-cli
-
+cd SC
 cargo test
 cargo clippy --all-targets
 stellar contract build --optimize
 ```
 
-`stellar contract build` strips more aggressively than a plain `cargo build --release` and writes to
-`target/wasm32v1-none/release/`.
+The optimized artifact from the current CLI is
+`target/wasm32v1-none/release/doublecheck_registry.wasm`.
 
----
+## Entity onboarding and consent
 
-## Interface
+`propose_entity` → `accept_entity` is the normal path:
 
-### Registry
+1. The issuer completes manual checks off-chain and calls `propose_entity`. The proposal commits the
+   controller, public descriptor fields, credential hash/URI, terms hash, acceptance deadline, and
+   badge expiry. It reserves the handle and controller but creates no active badge.
+2. The intended controller authenticates `accept_entity(pending_id)` before `accept_by`. Only that
+   transaction creates the active `Entity` and sets `verified_at`.
+3. The issuer or controller can cancel at any time. After the acceptance deadline or proposed badge
+   expiry, any authenticated caller can release an abandoned proposal and its reservations.
 
-| Function | Authorised caller | Notes |
-|---|---|---|
-| `register_entity(kind, controller, handle, display_name, domain, jurisdiction, metadata_hash, metadata_uri, expires_at) -> u64` | admin | returns the new entity id |
-| `update_metadata(caller, id, metadata_hash, metadata_uri)` | entity controller or admin | repoints the off-chain credential |
-| `renew_entity(id, expires_at)` | admin | also clears a suspension |
-| `set_entity_status(caller, id, status)` | admin, or arbiter for `Active`/`Suspended` | `Revoked` is terminal and admin-only |
-| `rotate_controller(id, new_controller)` | admin | key recovery only; the sole way a badge moves |
-| `add_strike(caller, id) -> u32` | admin or arbiter | records an upheld complaint |
+`accept_by` must be in the future, strictly before the proposed badge expiry, and no more than 30 days
+from proposal. Every badge expiry is required, in the future, and no more than 400 days from issuance
+or renewal. The preferred operational term is about one year, followed by re-verification.
 
-### Claims
+The one-step `register_entity` remains for expert multi-auth tooling, but both the issuer admin and
+the proposed controller must authenticate it. It is not an issuer-only shortcut around consent.
 
-| Function | Authorised caller | Notes |
-|---|---|---|
-| `attest_relationship(caller, org, person, rel_type, role, department, start_date, end_date, public_display, detail_hash) -> u64` | org controller, subject, or admin | signer determines `confirmation` |
-| `end_relationship(caller, id, end_date)` | org controller, subject, or admin | closes without deleting |
-| `set_relationship_status(caller, id, status)` | see below | |
-| `set_public_display(caller, id, public_display)` | subject or admin only | |
-| `issue_mandate(caller, org, representative, relationship, mandate_type, scope, territory, valid_from, valid_until, detail_hash) -> u64` | org controller, representative, or admin | `valid_until` may not be zero |
-| `set_mandate_status(caller, id, status)` | see below | |
+For `EntityKind::Person`, `display_name`, `domain`, and `jurisdiction` must be empty; the contract
+rejects personal descriptors there. Names and verification evidence belong in off-chain credentials
+stored where the issuer can support deletion. The on-chain handle, address, dates, hashes, and
+free-text claim fields remain public; IPFS, mirrors, browser/CDN caches, and ledger anchors are not
+guaranteed erasable.
 
-Claim status transitions: the admin may set any status; the arbiter may set `Disputed`, `Suspended`
-or `Withdrawn`; an organisation's controller may set any status on its own claims; a subject may only
-set `Withdrawn` on a claim about themselves.
+Organisation badges require non-empty legal name, domain, and jurisdiction descriptors. Relationship
+roles and mandate scopes are also required; department and territory remain optional.
+Credential and terms hashes cannot be all-zero placeholders. Credential URIs are bounded to
+`https://` or `ipfs://`; handles/text/URIs reject controls, invisible Unicode formatting characters,
+and reserved product routes where applicable.
 
-Claim writes always succeed even when an entity's index vector is full — the claim is stored and
-readable by id, and only the index stops growing. See
-[Storage, rent and archival](../docs/architecture.md#storage-rent-and-archival).
+### Entity interface
 
-### Reads
-
-All free, all wallet-free, all simulated.
-
-| Function | Returns |
+| Function | Authorisation and effect |
 |---|---|
-| `check(handle) -> Option<Check>` | the record, its status with expiry applied, and claim counts — a verifier page in one call |
-| `check_by_id(id) -> Option<Check>` | the same, for callers that already resolved the handle |
-| `is_authorised(org, representative) -> bool` | whether a live mandate exists between the pair *and* both badges are still valid |
-| `get_entity(id)`, `get_entity_by_handle(handle)`, `get_entity_by_controller(address)` | `Option<Entity>` |
-| `get_relationship(id)`, `get_mandate(id)` | `Option<Relationship>` / `Option<Mandate>` |
-| `relationship_status(id)`, `mandate_status(id)` | `Option<ClaimStatus>` with expiry applied |
-| `relationships_attested_by(org)`, `relationships_about(person)` | `Vec<u64>` of claim ids |
-| `mandates_issued_by(org)`, `mandates_held_by(representative)` | `Vec<u64>` of claim ids |
-| `entity_count()`, `claim_count()` | `u64` |
-| `admin()`, `arbiter()`, `paused()` | current configuration |
+| `propose_entity(...) -> u64` | admin; creates a pending offer only |
+| `accept_entity(pending_id) -> u64` | proposed controller; creates active entity |
+| `cancel_entity_proposal(caller, pending_id)` | issuer/controller, or any authenticated caller after deadline/expiry |
+| `get_pending_entity(...)`, `get_pending_entity_by_controller(...)` | public reads |
+| `register_entity(...) -> u64` | admin and controller multi-auth |
+| `update_metadata(caller, id, hash, uri)` | that badge's stored issuer only; subject cannot replace the vetted anchor |
+| `renew_entity(id, expires_at)` | stored issuer after re-verification; clears suspension, never revocation |
+| `set_entity_status(caller, id, status)` | stored issuer, or global arbiter under the rules below |
+| `propose_controller(caller, id, new_controller)` | current controller only |
+| `approve_controller_rotation(id)` | stored issuer after recovery review |
+| `accept_controller(id)` | issuer-approved destination controller |
+| `cancel_controller_rotation(caller, id)` | current controller or stored issuer |
+| `get_pending_controller(id)`, `get_approved_controller(id)` | public recovery state |
+| `rotate_controller(id, new_controller)` | compatibility path requiring stored issuer, current controller, and destination auth |
+| `add_strike(caller, id)` | stored issuer or global arbiter; records an upheld off-chain outcome |
 
-`check` and `is_authorised` carry most of the product. The first renders a verifier page from one
-round trip; the second answers "may this person act for that company today" in a single storage read,
-and deliberately validates both parties' badges as well as the mandate, so revoking an organisation
-invalidates its outstanding mandates without each needing to be cancelled.
+`Revoked` is stored-issuer-only and terminal. An arbiter may suspend and may lift only a suspension
+that same arbiter placed; it cannot lift an issuer suspension or revoke. Issuer renewal represents a
+new verification decision and can clear a suspension.
 
-### Governance
+`Entity.issuer` is immutable. A global admin handover controls future issuance, configuration and
+upgrades, but does not inherit lifecycle authority over the previous issuer's badges. This needs no
+storage migration because every existing entity already stores its issuer; it does require the old
+issuer key/custody process to remain available until its entire cohort has expired or been revoked.
+There is deliberately no authority-reassignment escape hatch in this version.
 
-`propose_admin(new_admin)` / `accept_admin()` — two-step handover, so a mistyped address cannot lock
-the registry. `set_arbiter(arbiter)`, `set_paused(paused)`, `upgrade(new_wasm_hash)`.
+Controller recovery is an asynchronous three-role flow: the current controller proposes an exact
+destination, that badge's stored issuer approves it after its recovery/re-verification policy, and only
+then may that destination accept. Replacing a proposal clears its approval. An older pending proposal
+found during an upgrade has no approval entry and therefore fails closed until the issuer reviews it.
 
----
+## Claims
 
-## Deploy
+The signer-derived confirmation is immutable evidence:
 
-Create the two role keys. The admin issues and revokes badges; the arbiter records outcomes from the
-off-chain complaint process. They may be the same address initially and separated later with
-`set_arbiter`.
+| Authenticated signer | Stored confirmation |
+|---|---|
+| organisation controller | `CounterpartyConfirmed` |
+| subject/representative controller | `SelfAsserted` |
+| admin/issuer | `IssuerConfirmed` |
+
+An organisation cannot publish a relationship about a person unilaterally. Organisation-attested
+relationships start unlisted; the subject or admin can change `public_display`. A subject may publish
+their own self-assertion. Start dates cannot be in the future.
+
+Status changes are role-aware. A subject can withdraw a claim about itself but cannot strengthen it.
+An arbiter can dispute, suspend, or withdraw, but cannot activate or complete. An organisation cannot
+clear an arbiter-created dispute/suspension itself. Relationship `Ended`/`Withdrawn` and mandate
+`Completed`/`Withdrawn` are terminal; a changed agreement requires a new claim.
+
+| Function | Purpose |
+|---|---|
+| `attest_relationship(...) -> u64` | records an organisation/person affiliation |
+| `end_relationship(caller, id, end_date)` | closes a relationship without deleting history |
+| `set_relationship_status(...)` | applies a permitted role-aware transition |
+| `set_public_display(...)` | subject/admin publication control |
+| `issue_mandate(...) -> u64` | records a non-empty scope and required validity window of at most 366 days; parties must differ |
+| `set_mandate_status(...)` | applies a permitted role-aware transition |
+
+## Authorisation reads
+
+All read functions can be simulated without a wallet. Simulation is free of transaction fees and
+does not mutate ledger state.
+
+| Function | Result |
+|---|---|
+| `check(handle)`, `check_by_id(id)` | entity, effective status, and claim counts |
+| `is_authorised(org, representative)` | strict current mandate decision |
+| `get_entity*`, `get_relationship`, `get_mandate` | raw records |
+| `relationship_status`, `mandate_status` | status with time-derived expiry |
+| `relationships_*`, `mandates_*` | bounded per-entity claim-id indexes |
+| `entity_count`, `claim_count`, `admin`, `arbiter`, `paused` | registry configuration/counters |
+
+`is_authorised` requires all of the following:
+
+- both entity badges exist and are effectively `Active` and unexpired;
+- the mandate belongs to the requested pair, is active, and is within `valid_from..valid_until`;
+- confirmation is `CounterpartyConfirmed` or `IssuerConfirmed`, never `SelfAsserted`; and
+- a non-zero linked relationship exists, matches the same parties, has subject/admin publication
+  consent, and is effectively active.
+
+The primary scan walks a pair index containing at most 64 relevant company- or issuer-confirmed
+mandates. Self-assertions never enter it, so a representative cannot consume its capacity. Confirmed
+issuance and status changes prune inactive, expired, missing, and malformed entries; future-scheduled
+active mandates remain because they may become authoritative without another transaction. The
+contract never evicts a still-live or scheduled confirmation: when all 64 slots remain relevant,
+confirmed issuance or reactivation fails with `IndexFull` until one is closed or expires. For upgrade
+compatibility, `is_authorised` then falls back to the older pair and representative-wide indexes,
+within a shared 128-record strict scan budget. Every scan continues past scheduled, self-asserted, or
+inactive records, so they cannot mask another indexed live confirmation. A standalone mandate with
+relationship id `0` is allowed.
+
+General party/history indexes remain capped at their earliest 512 ids and events remain the
+authoritative discovery feed at larger scale. Production still needs an indexer and an operational
+policy well before any exact pair approaches the confirmed capacity bound.
+
+## Storage TTL and keepalive
+
+Soroban persistent entries can archive independently of their business expiry. Contract reads call
+TTL-extension helpers, but a simulated read is discarded and therefore **does not persist an
+extension**. Page traffic does not pay registry rent.
+
+`keepalive(entity_cursor, claim_cursor, limit)` requests extensions for bounded slices. It is
+permissionless at the registry layer but must be invoked in a signed, submitted transaction whose
+source account pays the network fee. `limit` is `1..50`. Repeatedly submit using the returned
+`next_entity` and `next_claim` cursors until `done` is true. The included runner is:
+
+```bash
+cd SC
+STELLAR_CONTRACT_ID=<vnext-contract-id> \
+STELLAR_KEEPER_IDENTITY=<funded-cli-identity> \
+STELLAR_NETWORK=testnet \
+./scripts/keepalive.sh
+```
+
+Run it on a monitored schedule well before the extension threshold, persist/retry failed cursors,
+and alert on failures. Already archived entries require a separate restore-footprint transaction;
+keepalive is preventative, not a restore operation.
+
+## Governance
+
+- `propose_admin(new_admin)` / `accept_admin()` is a two-step handover for future issuance and global
+  configuration; existing `Entity.issuer` values and their authority do not change.
+- `set_arbiter(arbiter)` changes the complaint-outcome role.
+- `set_paused(paused)` blocks new proposals/acceptance/claims while takedown paths remain available.
+- `upgrade(new_wasm_hash)` changes code at the same contract address and is admin-authenticated.
+
+Every material action emits an event, including proposal/cancellation, registration, metadata update,
+controller rotation, status changes, relationship end, publication consent, strikes, governance,
+pause, and upgrade.
+
+## Deploy or upgrade vNext
+
+For a clean deployment:
 
 ```bash
 stellar network use testnet
-stellar keys generate dc-admin   --network testnet --fund
+stellar keys generate dc-admin --network testnet --fund
 stellar keys generate dc-arbiter --network testnet --fund
-
+cd SC
 stellar contract build --optimize
 stellar contract deploy \
-  --wasm target/wasm32v1-none/release/doublecheck_registry.optimized.wasm \
-  --source dc-admin --network testnet \
-  -- \
-  --admin   "$(stellar keys address dc-admin)" \
-  --arbiter "$(stellar keys address dc-arbiter)"
+  --wasm target/wasm32v1-none/release/doublecheck_registry.wasm \
+  --source dc-admin --network testnet -- \
+  --admin <admin-address> --arbiter <arbiter-address>
 ```
 
-Mainnet uses the same commands with `--network mainnet` and funded keys. See
-[`docs/deployment.md`](../docs/deployment.md) for what to settle first.
+For the existing address, install the new Wasm and invoke `upgrade(new_wasm_hash)` through the
+current admin. Rehearse against a copy of representative state first: vNext adds new persistent keys
+and changes the public interface. Validate every legacy entity/claim and all security invariants
+after the upgrade.
 
-## Walkthrough
+In either path, generate the TypeScript binding **from the deployed vNext specification after the
+transaction is final**, update the frontend contract id if it changed, rebuild, and run a smoke test.
+Do not generate from source and assume the live contract matches. See
+[`FE/README.md`](../FE/README.md) and [`docs/deployment.md`](../docs/deployment.md).
 
-Two further keys stand in for an organisation and a recruiter. In production these are passkey smart
-wallets, not CLI keypairs.
-
-```bash
-stellar keys generate acme --network testnet --fund
-stellar keys generate mara --network testnet --fund
-export C=<contract id>
-export ZERO=0000000000000000000000000000000000000000000000000000000000000000
-```
-
-Two CLI conventions to note first, because the error messages are opaque: **`String` arguments
-require their JSON quotes** (`--handle '"acme-robotics"'`; empty is `'""'`), and **enums are passed
-as their integer value** — `--kind 0` for `Organisation`, `1` for `Person`. Running
-`stellar contract invoke --id $C -- <function> --help` prints the expected form of every argument.
-
-Register an organisation. `expires_at` is a Unix timestamp; twelve months is the recommended default,
-so trust is renewed rather than assumed.
-
-```bash
-stellar contract invoke --id $C --source dc-admin --network testnet -- \
-  register_entity \
-  --kind 0 \
-  --controller acme \
-  --handle '"acme-robotics"' \
-  --display_name '"Acme Robotics GmbH"' \
-  --domain '"acme-robotics.de"' \
-  --jurisdiction '"Germany"' \
-  --metadata_hash $ZERO \
-  --metadata_uri '"https://verify.example.com/c/acme-robotics.json"' \
-  --expires_at 1817588221
-```
-
-Register a recruiter. Natural persons are registered with `display_name` empty — the name is served
-from the off-chain credential so it remains erasable. See
-[Personal data](../docs/architecture.md#personal-data).
-
-```bash
-stellar contract invoke --id $C --source dc-admin --network testnet -- \
-  register_entity \
-  --kind 1 --controller mara --handle '"mara-lindqvist"' \
-  --display_name '""' --domain '""' --jurisdiction '""' \
-  --metadata_hash $ZERO \
-  --metadata_uri '"https://verify.example.com/p/mara-lindqvist.json"' \
-  --expires_at 1817588221
-```
-
-Entity ids are sequential from 1, so these are `1` and `2`. Claim ids are a separate sequence, also
-from 1, shared between relationships and mandates.
-
-The organisation attests the affiliation, then authorises the recruiter to act on its behalf. Because
-the organisation's own key signs, both claims are recorded as `CounterpartyConfirmed`
-(`confirmation: 1` in the emitted event). Had the recruiter signed them, they would read
-`SelfAsserted` (`0`) — and that difference is visible to anyone checking.
-
-```bash
-# -> claim id 1
-stellar contract invoke --id $C --source acme --network testnet -- \
-  attest_relationship --caller acme --org 1 --person 2 \
-  --rel_type 0 --role '"Senior Technical Recruiter"' --department '"Talent"' \
-  --start_date 1740000000 --end_date 0 --public_display true --detail_hash $ZERO
-
-# -> claim id 2, resting on relationship 1
-stellar contract invoke --id $C --source acme --network testnet -- \
-  issue_mandate --caller acme --org 1 --representative 2 --relationship 1 \
-  --mandate_type 0 --scope '"Engineering hiring, robotics division"' --territory '"EU"' \
-  --valid_from 1750000000 --valid_until 1760000000 --detail_hash $ZERO
-```
-
-Anyone can now check. Reads are simulated rather than submitted, so they cost nothing and change
-nothing; the CLI still wants a `--source` to simulate against, but any account works and none is
-charged. In a browser this is a single `simulateTransaction` call with no wallet involved.
-
-```bash
-stellar contract invoke --id $C --source dc-admin --network testnet -- \
-  check --handle '"mara-lindqvist"'
-
-stellar contract invoke --id $C --source dc-admin --network testnet -- \
-  is_authorised --org 1 --representative 2
-```
-
-`check` returns a complete verifier page:
-
-```json
-{"valid":true,"effective_status":0,"relationships":1,"mandates":1,"checked_at":1786052297,
- "entity":{"id":2,"kind":1,"handle":"mara-lindqvist","display_name":"",
-           "controller":"GCINRBLO...X26A","issuer":"GCHCG237...2GQP",
-           "metadata_uri":"https://verify.example.com/p/mara-lindqvist.json",
-           "status":0,"strikes":0,"verified_at":1786052272,"expires_at":1817588221}}
-```
-
-The organisation withdraws the mandate in one transaction (`3` = `Withdrawn`):
-
-```bash
-stellar contract invoke --id $C --source acme --network testnet -- \
-  set_mandate_status --caller acme --id 2 --status 3
-```
-
-`is_authorised` returns false immediately, everywhere the badge is embedded. Mandates also expire at
-`valid_until` and badges at `expires_at` with no transaction and no scheduled job, because expiry is
-derived at read time rather than stored.
-
----
-
-## Live testnet deployment
-
-| | |
-|---|---|
-| Contract | `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP` |
-| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) · [Stellar Lab](https://lab.stellar.org/r/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) |
-| Wasm hash | `3be4a99da859fcb642ddceec919cce436d383c582fee26e8ed6ff96baa3abc4c` |
-| admin | `GCHCG2376NU6L7ZUTXCWC6A7D4PZMYHHODB7RJM6QRC6FWB5V5H72GQP` |
-| arbiter | `GASB4EXRHAYHMJ2TXKVBU43OVBFX52BA6VGP77VFTEYPLW375724M72V` |
-
-Seeded with 5 entities and 8 claims covering every path the explorer renders: company-confirmed and
-self-asserted relationships, an agency-to-agency mandate, a withdrawn mandate, and a relationship
-that has aged into `Expired` without any transaction.
-
-## Upgrades
-
-`upgrade(new_wasm_hash)` replaces the code while keeping the contract address, so badge links and QR
-codes already in circulation continue to resolve. Admin-only, and worth rehearsing on testnet before
-it is needed on mainnet.
-
-Deploying to a *new* address instead requires regenerating the explorer's bindings — see
-[`FE/README.md`](../FE/README.md).
+The public testnet address runs vNext with 5 preserved demonstration entities and 8 claims. It proves
+deployment and ABI compatibility only, not production verification readiness.

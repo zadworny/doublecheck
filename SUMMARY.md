@@ -7,6 +7,8 @@
 
 * [Traction](docs/traction.md)
 * [Roadmap](docs/roadmap.md)
+* [Implementation report](docs/IMPLEMENTATION_REPORT_2026-08-10.md)
+* [Implementation report PDF](docs/IMPLEMENTATION_REPORT_2026-08-10.pdf)
 
 ## Technical
 

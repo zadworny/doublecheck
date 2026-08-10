@@ -8,11 +8,10 @@
  * the *other* audience: someone who holds a badge and wants to see their own
  * record without knowing their entity id.
  *
- * It is deliberately **not** authentication. No transaction is signed and no
- * ownership is proven; the wallet is only asked for its public address, which
- * is then matched against controllers that are already public on-chain. Anyone
- * could type the same address by hand and see the same page. Do not build
- * anything privileged on top of this without a real signature challenge.
+ * The connection itself is deliberately **not** authentication. It only reads
+ * a public address. The holder console separately re-checks the live account,
+ * network, and on-chain controller, then requires Freighter to sign the exact
+ * Soroban transaction before any privileged write can occur.
  */
 
 import {

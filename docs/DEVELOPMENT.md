@@ -1,141 +1,180 @@
 # Development guide
 
-This guide is for contributors working on the registry, the explorer, or both. It complements the
-component-level instructions in [`SC/README.md`](../SC/README.md) and
-[`FE/README.md`](../FE/README.md); those documents remain the authoritative contract interface and
-explorer behaviour references.
+DoubleCheck contains a Soroban contract, a React/Vite browser application, and a Vercel Node intake
+function. Work from each component directory and keep live-contract compatibility explicit.
 
 ## Prerequisites
 
-| Area | Required tools | Declared in |
-|---|---|---|
-| Contract | Rust stable with the `wasm32v1-none` target | [`SC/rust-toolchain.toml`](../SC/rust-toolchain.toml) |
-| Contract tooling and deployments | Stellar CLI | [Smart-contract README](../SC/README.md#build-and-test) |
-| Explorer | A current Node.js LTS release and npm | [`FE/package.json`](../FE/package.json) |
-
-The frontend uses a public Stellar testnet RPC endpoint by default. No secret is required for local
-read-only work. Values prefixed with `VITE_` are bundled into the browser, so they must be safe to
-publish; configuration and defaults are shown in [`FE/.env.example`](../FE/.env.example).
-
-## First local run
-
-Clone the repository, then install and verify each independent component from its own directory.
+| Area | Tools |
+|---|---|
+| Contract | Rust stable, `wasm32v1-none`, Stellar CLI 27.x/compatible |
+| Frontend and API tests | Node.js 22-compatible LTS and npm |
+| Wallet-write testing | Freighter configured for the same network and a funded controller account |
 
 ```bash
-# Explorer
+rustup target add wasm32v1-none
+cd FE && npm ci
+cd ../SC && cargo test
+```
+
+Copy [`FE/.env.example`](../FE/.env.example) to an untracked `FE/.env` only when overriding defaults.
+Every `VITE_*` value is public in the browser bundle. `INTAKE_WEBHOOK_URL` and its optional bearer
+token are server-only and must never be renamed with that prefix.
+
+## Compatibility warning
+
+The repository contract, public testnet address, and `FE/src/contract/registry.ts` currently share
+the vNext interface deployed on 10 August 2026. Any later contract source change recreates an ABI
+risk until that candidate is deployed and the binding is generated again from the final live
+specification.
+
+Do not hand-edit generated types to hide an ABI mismatch. For contract-dependent frontend work,
+choose one of these honest environments:
+
+- the deployed vNext test contract + its generated binding;
+- a separate deployed candidate test contract + a binding generated from it; or
+- contract unit tests/local tooling that do not claim to represent the public deployment.
+
+## Local processes
+
+```bash
+# Browser app
 cd FE
-npm ci
 npm run dev
 
-# Contract (in a second terminal, from the repository root)
+# Contract
 cd SC
 cargo test
+
+# Intake validation tests (does not contact a webhook)
+cd FE
+npm test
 ```
 
-The explorer points at the deployed testnet registry unless a local `FE/.env` overrides its contract
-id, RPC URL, or network passphrase. See the [Explorer README](../FE/README.md#running-it) before
-targeting another deployment.
+Vite's dev server is not evidence that Vercel function routing works. Test `/api/intake` in a Vercel
+preview or compatible local function runtime before release. Missing webhook configuration should
+return `503`; it must never return a fake success/reference.
 
-## Checks before a pull request
+## Required checks
 
-Run the checks that apply to the files you changed. Continuous integration runs all of the following
-on pull requests and pushes to `main`.
-
-| Area | Command | What it verifies |
+| Area | Command | Coverage |
 |---|---|---|
-| Explorer lint | `cd FE && npm run lint` | Static analysis with oxlint. |
-| Explorer build | `cd FE && npm run build` | TypeScript project build and Vite production bundle. |
-| Contract formatting | `cd SC && cargo fmt --all --check` | Rust formatting. |
-| Contract lint | `cd SC && cargo clippy --all-targets -- -D warnings` | Lint-clean contract and tests. |
-| Contract tests | `cd SC && cargo test` | Authorisation, status, lifecycle, and storage behaviour. |
-| Contract Wasm | `cd SC && cargo build --target wasm32v1-none --release` | Deployable Wasm build; CI also enforces Stellar's 128 KB size limit. |
+| Frontend/API tests | `cd FE && npm test` | Node-native intake/credential validation |
+| Frontend lint | `cd FE && npm run lint` | oxlint |
+| Frontend build | `cd FE && npm run build` | TypeScript project build and Vite bundle |
+| Contract format | `cd SC && cargo fmt --all --check` | Rust formatting |
+| Contract lint | `cd SC && cargo clippy --all-targets -- -D warnings` | contract and test lints |
+| Contract tests | `cd SC && cargo test` | trust, consent, status, expiry, index, and TTL behaviour |
+| Deployable Wasm | `cd SC && stellar contract build --optimize` | exact optimized candidate |
 
-For a documentation-only change, verify the Markdown links you touch and check the rendered files
-in GitHub or GitBook; source builds are not required solely because prose changed.
+CI also builds a release Wasm and enforces the 131,072-byte network limit. Do not make a prose count
+or locally cached artifact a substitute for current test/build output.
 
-## Making a contract change
+For documentation-only changes, run `git diff --check`, verify relative links/anchors, and search for
+stale claims such as “reads extend TTL,” “static/no backend,” “read-only,” or “vNext is deployed.”
 
-The contract is the source of truth. Treat an interface or data-model change as a change across the
-following boundary:
+## Contract-change workflow
 
 ```text
-Rust types and entry points
+Rust types/entry points
         ↓
-contract tests and emitted events
+auth/lifecycle/privacy regression tests and event snapshots
         ↓
-generated TypeScript bindings
+optimized Wasm and rehearsed testnet deployment/upgrade
         ↓
-chain-to-UI mapping and pages
+binding generated from the final live specification
         ↓
-contract/explorer/documentation updates
+data mapping, read/write UX, browser/API tests
+        ↓
+architecture, security, deployment, and release documentation
 ```
 
-1. Change the contract in `SC/contracts/doublecheck-registry/src/`. Keep the authorisation path and
-   effective-status rules explicit; add or update a regression test in `test.rs` for every behaviour
-   change.
-2. Run the contract checks above. If the public interface changes, build or deploy the intended
-   contract version before regenerating bindings.
-3. Regenerate the explorer client from `FE/`:
+1. Change `SC/contracts/doublecheck-registry/src/` and add tests for success, unauthorised callers,
+   temporal boundaries, and terminal states. Update event snapshots intentionally.
+2. Run all contract checks and record the exact candidate hash/size.
+3. Rehearse an in-place upgrade against representative state or deploy a clean candidate. New
+   persistent keys and ABI changes require explicit compatibility checks.
+4. After finality, generate from that contract:
 
    ```bash
-   npm run bindings
-   # A different deployment/network:
-   CONTRACT_ID=C… STELLAR_NETWORK=testnet npm run bindings
+   cd FE
+   CONTRACT_ID=<vnext-contract-id> STELLAR_NETWORK=testnet npm run bindings
    ```
 
-   `FE/src/contract/registry.ts` is generated. Do not hand-edit it: update
-   `FE/scripts/generate-bindings.mjs` when generation needs a durable compatibility fix.
-4. Update `FE/src/data/registry.ts` first if a contract type changes. It is the intentional boundary
-   between generated Soroban types and the UI's display-friendly data shapes. Then adapt affected
-   pages and components.
-5. Update the contract README for public entry points, [Architecture](architecture.md) for a design
-   or policy change, and [Deployment](deployment.md) when deployment or operations change.
+5. Review `FE/src/contract/registry.ts`; never edit it by hand. Adapt the boundary in
+   `FE/src/data/registry.ts` and any write builders in `FE/src/lib/write.ts`.
+6. Run frontend/API checks and network smoke tests. A simulated write is preflight only; success
+   requires `signAndSend` and final-ledger confirmation.
+7. Update [`SC/README.md`](../SC/README.md), [Architecture](architecture.md),
+   [Deployment](deployment.md), and [Security](../SECURITY.md) when promises change.
 
-An in-place `upgrade()` preserves the contract address. A redeployment to a new address requires
-both regenerated bindings and a deliberate explorer configuration change; existing share links
-should continue to resolve only when the contract address is preserved.
+An in-place upgrade preserves the address but still needs regenerated bindings when the interface
+changes. A new address additionally requires environment updates and an honest migration/link plan.
 
-## Making an explorer change
+## Frontend data and write paths
 
-The explorer is a read-only, static React application. Its data path is deliberately narrow:
+Public read path:
 
 ```text
-generated contract client → src/lib/chain.ts → src/data/registry.ts
-                         → RegistryContext → route pages → UI components
+generated client → src/lib/chain.ts → src/data/registry.ts
+                 → RegistryContext → route/component
 ```
 
-- Keep direct contract calls in `src/data/` and `src/lib/chain.ts`; pages should consume the
-  synchronous snapshot exposed by `RegistryContext`.
-- Add a route in `src/App.tsx`. The generic `:handle` route must remain after all static and
-  prefixed routes, otherwise it captures them.
-- A direct visit to any route must work after deployment. Preserve the SPA fallback in
-  [`FE/vercel.json`](../FE/vercel.json) when changing hosting configuration.
-- Treat the status derived by the contract as authoritative. The UI mirrors expiry calculations for
-  efficient rendering, so update its mapping when the Rust rule changes.
+The snapshot refreshes on a timer and when the document becomes visible. Keep unpublished
+relationships out of every public snapshot, lookup, search, and feed path. `/badge/:handle` is
+chrome-free and no-store; it must resolve live data, not cache a status assertion.
 
-See the [Explorer README](../FE/README.md#how-data-reaches-the-page) for the current record mapping
-and the [Deployment guide](deployment.md#client-side-routing) for the deep-link requirement.
+Private intake path:
 
-## Common maintenance tasks
+```text
+/apply or ReportModal → src/lib/intake.ts → POST /api/intake
+                     → server/intake-validation.ts → private HTTPS webhook
+```
 
-| Task | Where to start |
+The allowlist validator is the trust boundary. Update UI, client types, server allowlists, byte caps,
+and Node tests together. Do not log raw application/report bodies. Intake never changes contract
+state.
+
+Wallet write path:
+
+```text
+connected Freighter controller → exact statement/canonical detail hash
+                              → contract simulation → wallet signature
+                              → submitted transaction → final confirmation
+```
+
+`src/lib/write.ts` and the `/manage` route implement holder affiliation, mandate, and withdrawal
+flows. Preserve exact controller/network matching, active-badge rules, safe handling of unpublished
+holder indexes, transaction review, and final confirmation. This is an expert/testnet Freighter
+path; issuer/arbiter, passkey, sponsorship, and production recovery workflows are not implemented.
+
+When adding routes, keep the generic `:handle` route after every static/prefixed route. Smoke-test
+direct navigation and refresh through the production SPA rewrite.
+
+## Common tasks
+
+| Task | Start here |
 |---|---|
-| Point a local explorer at another registry | `FE/.env.example`, then `FE/.env` (untracked) |
-| Refresh generated bindings | `FE/scripts/generate-bindings.mjs` and `npm run bindings` |
-| Add a contract event for an indexer | `SC/contracts/doublecheck-registry/src/events.rs`, then [Deployment](deployment.md#deferred-the-indexer) |
-| Add a durable project document | [Documentation index](README.md#keeping-this-documentation-useful) and root `SUMMARY.md` |
-| Report a potential security issue | [Security policy](../SECURITY.md) — use private reporting |
+| Point the app at a different registry | `FE/.env.example`; rebuild after `VITE_*` changes |
+| Refresh live bindings | `FE/scripts/generate-bindings.mjs`, after deploy/upgrade finality |
+| Change application/report schema | `FE/src/lib/intake.ts`, `FE/server/intake-validation.ts`, tests |
+| Add holder transaction UX | `FE/src/lib/write.ts`, then route/page with statement review |
+| Add indexer support | contract events, then [Deployment](deployment.md#rpc-indexing-and-monitoring) |
+| Operate TTL | `SC/scripts/keepalive.sh`, then [Deployment](deployment.md#ttl-and-archival-operations) |
+| Report a security issue | private process in [`SECURITY.md`](../SECURITY.md) |
 
 ## Troubleshooting
 
-| Symptom | Likely cause and next check |
+| Symptom | Check |
 |---|---|
-| Explorer loads but records are missing | Confirm the `VITE_CONTRACT_ID`, RPC URL, and network passphrase match the deployment; rebuild after editing `VITE_*` values. |
-| A production deep link returns 404 | The static host is missing an SPA rewrite. For Vercel, preserve `FE/vercel.json`. |
-| Generated bindings do not compile | Regenerate with the project script rather than editing the generated file; its compatibility patches are intentional. |
-| Contract build misses the Wasm target | Run `rustup target add wasm32v1-none`, then retry from `SC/`. |
-| A record should have expired but still appears active | Check the contract's effective-status function and the frontend mapping; expiry is derived at read time, not written by a background job. |
+| Method missing/type mismatch | Deployed spec and generated binding likely differ; do not patch around it |
+| Records missing | contract id, RPC, passphrase, archived state, public-display filtering, index cap |
+| Wallet refuses/signs wrong network | Freighter address/network against all three configured network values |
+| Simulation passed but UI has no change | confirm transaction was signed, submitted, final, and then refresh |
+| Intake reports unavailable | server-only webhook configuration and downstream HTTPS acceptance |
+| Deep link 404 | preserve host SPA fallback and test the real deployment |
+| Quiet record archives | simulated reads do not persist TTL; inspect submitted keeper runs/restore |
+| Credential hash mismatch | exact raw bytes vs canonical JSON; hash match is not proof-suite validation |
 
-For production-readiness concerns — audit, key custody, personal data, RPC capacity, and archival —
-follow the [Roadmap](roadmap.md) and [Deployment](deployment.md) rather than treating local success
-as a launch criterion.
+Local success is not a launch criterion. Follow [Roadmap](roadmap.md) and
+[Deployment](deployment.md#mainnet-gates).

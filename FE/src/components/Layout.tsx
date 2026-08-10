@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 import { Navbar } from "./Navbar";
 import { chainConfig } from "../lib/chain";
 
@@ -27,7 +27,7 @@ export function Layout() {
         >
           <code>{chainConfig.contractId.slice(0, 6)}…{chainConfig.contractId.slice(-4)}</code>
         </a>{" "}
-        on Stellar.
+        on Stellar. <Link to="/standard" className="underline hover:text-sky-500">Verification standard</Link>.
       </footer>
     </div>
   );

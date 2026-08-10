@@ -2,11 +2,15 @@ import { useState } from "react";
 import { ReportModal } from "./ReportModal";
 
 interface ReportButtonProps {
-  subjectLabel: string;
+  target: {
+    type: "claim" | "entity";
+    id: string;
+    label: string;
+  };
   variant?: "icon" | "full";
 }
 
-export function ReportButton({ subjectLabel, variant = "icon" }: ReportButtonProps) {
+export function ReportButton({ target, variant = "icon" }: ReportButtonProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,7 +22,7 @@ export function ReportButton({ subjectLabel, variant = "icon" }: ReportButtonPro
           e.stopPropagation();
           setOpen(true);
         }}
-        title="Report this claim"
+        title={`Report this ${target.type}`}
         className={
           variant === "icon"
             ? "inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition hover:bg-red-500/10 hover:text-red-500"
@@ -30,7 +34,7 @@ export function ReportButton({ subjectLabel, variant = "icon" }: ReportButtonPro
         </svg>
         {variant === "full" && "Report"}
       </button>
-      <ReportModal open={open} onClose={() => setOpen(false)} subjectLabel={subjectLabel} />
+      <ReportModal open={open} onClose={() => setOpen(false)} target={target} />
     </>
   );
 }

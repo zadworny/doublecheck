@@ -30,19 +30,25 @@ type TabKey = (typeof TABS)[number]["key"];
 export function SharePanel({ subject }: { subject: Subject }) {
   const [tab, setTab] = useState<TabKey>("link");
 
-  // Handle-based, not id-based: a handle survives a re-deployment to a new
-  // contract and is legible in an email signature.
+  // Handle-based, not id-based: a handle is legible in an email signature and
+  // can survive a migration when the release process preserves or redirects it.
   const url = `${window.location.origin}/${subject.handle}`;
+  const badgeUrl = `${window.location.origin}/badge/${subject.handle}`;
   const label = subject.name || subject.handle;
 
   const qr = useMemo(() => qrSvg(url, { color: "currentColor" }), [url]);
   const download = useMemo(() => qrDataUri(url, { color: "#0f172a" }), [url]);
 
-  const embedHtml =
+  const linkHtml =
     `<a href="${url}" rel="noopener">` +
-    `Verified on DoubleCheck &mdash; ${escapeHtml(label)}` +
+    `View live DoubleCheck status &mdash; ${escapeHtml(label)}` +
     `</a>`;
-  const embedMarkdown = `[Verified on DoubleCheck — ${label}](${url})`;
+  const embedMarkdown = `[View live DoubleCheck status — ${escapeMarkdown(label)}](${url})`;
+  const iframeTitle = `Live DoubleCheck status for ${label}`;
+  const iframeHtml =
+    `<iframe src="${badgeUrl}" title="${escapeHtml(iframeTitle)}" ` +
+    `width="420" height="96" loading="lazy" ` +
+    `style="border:0;max-width:100%;" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
 
   return (
     <Panel title="Share this verification">
@@ -110,9 +116,28 @@ export function SharePanel({ subject }: { subject: Subject }) {
 
         {tab === "embed" && (
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                Live badge preview
+              </span>
+              <iframe
+                src={badgeUrl}
+                title={iframeTitle}
+                width="420"
+                height="96"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                className="block max-w-full rounded-xl border-0"
+              />
+            </div>
             <Snippet
-              heading="HTML — email signatures, websites"
-              value={embedHtml}
+              heading="Live iframe — websites and profile pages"
+              value={iframeHtml}
+              copyLabel="Copy the live iframe embed"
+            />
+            <Snippet
+              heading="HTML link — email signatures"
+              value={linkHtml}
               copyLabel="Copy the HTML embed"
             />
             <Snippet
@@ -121,8 +146,9 @@ export function SharePanel({ subject }: { subject: Subject }) {
               copyLabel="Copy the Markdown embed"
             />
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              These embed a <em>link</em>, not a result. Anyone following it sees the current status,
-              so a badge cannot keep claiming to be valid after it has been revoked or has expired.
+              The iframe re-reads the registry whenever it loads and states the current result. The
+              email-safe links make no static “verified” claim; anyone following one sees the live
+              status, including revocation, expiry, or the absence of a confirmed mandate.
             </p>
           </div>
         )}
@@ -161,4 +187,8 @@ function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function escapeMarkdown(text: string): string {
+  return text.replace(/([\\[\]()])/g, "\\$1");
 }

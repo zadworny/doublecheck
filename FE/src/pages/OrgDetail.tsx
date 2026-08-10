@@ -8,25 +8,44 @@ import { Panel } from "../components/Panel";
 import { SharePanel } from "../components/SharePanel";
 import { Tabs } from "../components/Tabs";
 import { ClaimRow } from "../components/ClaimRow";
+import { EntityStatusBanner } from "../components/EntityStatusBanner";
+import { ReportButton } from "../components/ReportButton";
+import { CredentialPanel } from "../components/CredentialPanel";
 import { formatDate } from "../lib/format";
 import { NotFound } from "./NotFound";
 
 export function OrgDetail({ orgId }: { orgId?: string } = {}) {
   const params = useParams();
   const id = orgId ?? params.id ?? "";
-  const { getOrganisation, getRelationshipsForOrganisation, getMandatesForOrganisation } = useRegistry();
+  const {
+    getOrganisation,
+    getRelationshipsForOrganisation,
+    getMandatesForOrganisation,
+    getMandatesHeldBy,
+  } = useRegistry();
   const org = getOrganisation(id);
   const [tab, setTab] = useState("all");
 
   if (!org) return <NotFound />;
 
   const relationships = getRelationshipsForOrganisation(org.id);
-  const mandates = getMandatesForOrganisation(org.id);
+  const mandatesIssued = getMandatesForOrganisation(org.id);
+  const mandatesHeld = getMandatesHeldBy(org.id);
+  const mandates = [...new Map(
+    [...mandatesIssued, ...mandatesHeld].map((mandate) => [mandate.id, mandate]),
+  ).values()];
   const allClaims = [...relationships, ...mandates].sort(
     (a, b) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime(),
   );
 
-  const visibleClaims = tab === "relationships" ? relationships : tab === "mandates" ? mandates : allClaims;
+  const visibleClaims =
+    tab === "relationships"
+      ? relationships
+      : tab === "issued"
+        ? mandatesIssued
+        : tab === "held"
+          ? mandatesHeld
+          : allClaims;
 
   return (
     <div className="space-y-6">
@@ -35,7 +54,7 @@ export function OrgDetail({ orgId }: { orgId?: string } = {}) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold">{org.name}</h1>
-            {org.verified && <VerifiedBadge issuer={org.issuer} />}
+            {org.verified && <VerifiedBadge issuer={org.issuer} label="Verified organisation" />}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
             <span>@{org.handle}</span>
@@ -53,23 +72,34 @@ export function OrgDetail({ orgId }: { orgId?: string } = {}) {
             )}
           </div>
         </div>
+        <ReportButton
+          variant="full"
+          target={{ type: "entity", id: org.id, label: `${org.name} (@${org.handle})` }}
+        />
       </div>
+
+      <EntityStatusBanner status={org.status} strikes={org.strikes} />
 
       <Panel>
         <dl className="grid grid-cols-1 divide-y divide-slate-100 text-sm sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-800/70">
           <div className="space-y-3 px-4 py-4">
             <Row label="Entity id" value={`#${org.id}`} />
+            <Row label="Current badge status" value={org.status} />
             <Row label="Controller" value={<HashId value={org.controller} />} />
             <Row label="Verified by" value={<HashId value={org.issuer} />} />
           </div>
           <div className="space-y-3 px-4 py-4">
             <Row label="Verified since" value={formatDate(org.verifiedAt)} />
             <Row label="Badge expires" value={org.expiresAt ? formatDate(org.expiresAt) : "Never"} />
-            <Row label="Relationships confirmed" value={String(relationships.length)} />
-            <Row label="Mandates issued" value={String(mandates.length)} />
+            <Row label="Public relationships listed" value={String(relationships.length)} />
+            <Row label="Mandates issued" value={String(mandatesIssued.length)} />
+            <Row label="Mandates held as representative" value={String(mandatesHeld.length)} />
+            <Row label="Upheld complaint outcomes" value={String(org.strikes)} />
           </div>
         </dl>
       </Panel>
+
+      <CredentialPanel key={`${org.id}:${org.metadataUri}:${org.metadataHash}`} subject={org} />
 
       <SharePanel subject={org} />
 
@@ -79,7 +109,8 @@ export function OrgDetail({ orgId }: { orgId?: string } = {}) {
             tabs={[
               { key: "all", label: "All claims", count: allClaims.length },
               { key: "relationships", label: "Relationships", count: relationships.length },
-              { key: "mandates", label: "Mandates", count: mandates.length },
+              { key: "issued", label: "Mandates issued", count: mandatesIssued.length },
+              { key: "held", label: "Mandates held", count: mandatesHeld.length },
             ]}
             active={tab}
             onChange={setTab}

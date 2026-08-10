@@ -1,86 +1,98 @@
 ![DoubleCheck](https://github.com/user-attachments/assets/22f83114-c2ff-45d0-b3a2-bc6085259e3c)
 
-Trust infrastructure that lets a company cryptographically confirm the people and organisations who represent it
+Trust infrastructure that lets a company cryptographically confirm the people and organisations
+authorised to represent it.
 
----
+DoubleCheck answers three questions from one public link: is this subject verified, is the stated
+relationship supported, and is there a confirmed mandate that is valid now? A reader needs no
+wallet or account.
 
-A recruiter makes contact about a role at a company. Is the person real? Do they actually work
-there? Are they authorised to be recruiting for it right now? None of those questions can currently
-be answered quickly, and job-scam fraud runs into billions a year in part because of it.
-
-DoubleCheck answers all three from a single link — with no wallet, no account and no prior setup on
-the reader's side.
-
-| | |
+| Directory | Purpose |
 |---|---|
-| [`SC/`](SC/) | Soroban smart contract (Rust) — the registry itself |
-| [`FE/`](FE/) | React + Vite explorer — the public verifier |
-| [`docs/`](docs/) | project, technical, operational, and product documentation |
+| [`SC/`](SC/) | Soroban registry contract (Rust) |
+| [`FE/`](FE/) | React/Vite verifier plus Vercel intake function |
+| [`docs/`](docs/) | Architecture, operations, development, and roadmap |
 
-## How it works
+## Trust flow
 
-An issuer vets an organisation or a person and registers them on-chain. The organisation's own key
-then attests who is affiliated with it, and issues time-bound **mandates**: "this person may recruit
-for us, within this scope, until this date."
+1. A recruiter, agency, or hiring company submits an off-chain application. The issuer completes
+   manual KYC/KYB and evidence review outside the public ledger.
+2. The issuer proposes a badge on-chain. Its intended Stellar controller must explicitly accept it
+   before the badge becomes active. Proposals expire within 30 days; active badges expire within
+   400 days and require periodic re-verification.
+3. An organisation controller, subject controller, or issuer records relationships and mandates.
+   The signer determines whether a claim is self-asserted, counterparty-confirmed, or
+   issuer-confirmed.
+4. `is_authorised` returns true only for an active, unexpired pair with a currently valid confirmed
+   mandate. A self-asserted mandate is visible evidence, never authority. A linked relationship must
+   also match the parties, be published with subject/admin consent, and remain active.
+5. Suspension, withdrawal, completion, expiry, and revocation take effect at verification time.
+   Revocation and withdrawn/ended terminal states cannot be silently reversed.
 
-Any handle can then be checked with a single read call, and the answer records *which key signed it*.
-A claim confirmed by the organisation's own key is distinguishable from one the subject asserted
-about themselves — verifiably so, without trusting the site presenting it. Every badge and every
-mandate is revocable in one transaction and expires without any scheduled job.
+Natural-person names and verification evidence stay in off-chain credentials so issuer-controlled
+storage can support deletion. The chain contains addresses, handles, timestamps, hashes, and
+currently also short relationship/mandate text; those anchors and any third-party copies or caches
+are not guaranteed erasable, and the free text remains a privacy/legal design issue.
 
-## Live
-
-| | |
-|---|---|
-| **Explorer** | **https://doublecheck-lime.vercel.app** |
-| Contract | `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP` |
-| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) |
-| Seeded with | 5 entities, 8 claims — covering company-confirmed, self-asserted, withdrawn and expired |
-
-## Run it
-
-The explorer needs no configuration and no wallet — it reads the deployed testnet contract out of
-the box:
+## Run locally
 
 ```bash
-cd FE && npm install && npm run dev
+cd FE
+npm install
+npm run dev
 ```
 
-The contract needs the [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/install-cli)
-(`brew install stellar-cli`):
+Public reads use Stellar testnet without a wallet. Application and report delivery additionally
+requires the server-only `INTAKE_WEBHOOK_URL`; when it is absent the API returns an honest `503` and
+does not pretend a submission was received. See [`FE/README.md`](FE/README.md).
 
 ```bash
-cd SC && cargo test
+cd SC
+cargo test
+stellar contract build --optimize
 ```
 
-Every entry has a shareable link at `/<handle>`, a QR code for calls and messages, and HTML or
-Markdown embeds for signatures and profiles — each resolving to the live verifier rather than
-encoding a result that could go stale.
+The explorer provides shareable handle links, QR codes, neutral HTML/Markdown links, and a live
+iframe at `/badge/<handle>`. All resolve or re-read current registry state instead of freezing a
+"verified" result that could outlive a revocation.
 
-## Start here
+## Deployment status
 
-- **[`docs/README.md`](docs/README.md)** — the documentation index: choose the right guide, find
-  the source of truth for a topic, and see how the documentation is maintained.
-- **[`docs/architecture.md`](docs/architecture.md)** — the data model, the trust model, where the
-  on-chain boundary falls, and how personal data is handled.
-- **[`SC/README.md`](SC/README.md)** — contract interface reference, build, test, deploy, and a CLI
-  walkthrough of the full trust loop.
-- **[`FE/README.md`](FE/README.md)** — running the explorer, how records travel from chain to screen,
-  and regenerating the contract bindings.
-- **[`docs/deployment.md`](docs/deployment.md)** — hosting, operations, and the deferred indexer.
-- **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)** — contributor setup, checks, and the safe
-  contract-to-explorer change workflow.
-- **[`docs/REPOSITORY.md`](docs/REPOSITORY.md)** — repository layout, ownership boundaries,
-  generated files, and documentation conventions.
-- **[`docs/roadmap.md`](docs/roadmap.md)** — what is left to do, what blocks mainnet, and what is
-  deliberately out of scope.
-- **[`SECURITY.md`](SECURITY.md)** — reporting process, and what is in and out of scope.
+The repository and public Stellar testnet contract now run the **vNext interface**, including controller-consent onboarding, bounded
+annual renewal, issuer-controlled metadata anchors, stricter mandate authorisation, role-aware
+status transitions, and signed batched keepalive. Its contract suite passes, and the optimized Wasm
+is below Stellar's 128 KiB contract limit.
+
+The existing address was upgraded in place on 10 August 2026. Its 5 demonstration entities and 8
+claims were preserved, and the checked-in TypeScript binding was regenerated from the upgraded live
+specification. This is still testnet, not an audited production release.
+
+| Resource | Value |
+|---|---|
+| Hosted explorer | <https://doublecheck-lime.vercel.app> |
+| vNext testnet contract | `CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP` |
+| Wasm SHA-256 | `1ab20ff8c30b0f704b64dee4aed5d1dd111e5b24e33fb612ef9309aef5dc895a` |
+| Contract explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CDY4WIUWUJWDW4AKPTYFXTRONQQVS52PS2ZYFU2S5HEMW2U7LM5KRHKP) |
+| Demonstration data | 5 entities and 8 claims |
+
+## Documentation
+
+- [`docs/README.md`](docs/README.md) — documentation index and sources of truth
+- [`docs/architecture.md`](docs/architecture.md) — data, trust, privacy, and Stellar design
+- [`SC/README.md`](SC/README.md) — contract interface and release workflow
+- [`FE/README.md`](FE/README.md) — frontend, verifier, intake API, and bindings
+- [`docs/deployment.md`](docs/deployment.md) — release and operations runbook
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — contributor workflow
+- [`docs/REPOSITORY.md`](docs/REPOSITORY.md) — repository ownership map
+- [`docs/roadmap.md`](docs/roadmap.md) — release gates and remaining product work
+- [`SECURITY.md`](SECURITY.md) — security boundary and reporting
 
 ## Status
 
-MVP. The contract implements the trust loop end to end with 30 passing tests and is deployed to
-testnet. It has not been audited — an independent security review, a personal-data decision and
-proper admin key custody all block mainnet. See [`docs/roadmap.md`](docs/roadmap.md).
+Pre-production. Mainnet is blocked on full KYC/KYB operations, complaint and appeals policy,
+production key custody, credential proof/selective-disclosure design, operational indexing and TTL
+maintenance, and an independent security audit. Browser extension, passkey account abstraction,
+fee sponsorship, and production write dashboards are not complete.
 
 ## Licence
 

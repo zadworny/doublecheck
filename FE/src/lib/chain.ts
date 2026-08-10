@@ -1,10 +1,10 @@
 /**
  * Connection to the DoubleCheck registry contract on Stellar.
  *
- * Every call this app makes is a read, and reads on Soroban are *simulated*
- * rather than submitted: no transaction, no signature, no fee, no wallet. That
- * is the whole point of the verifier — a candidate checking a recruiter should
- * never be asked to install anything.
+ * Public verifier reads are *simulated* rather than submitted: no transaction,
+ * signature, fee, or wallet. Holder-initiated writes use a separate client in
+ * `write.ts`; a candidate checking a recruiter is never asked to install or
+ * connect anything.
  */
 
 import { Client, networks } from "../contract/registry";
@@ -31,10 +31,9 @@ export function registry(): Client {
     contractId: chainConfig.contractId,
     networkPassphrase: chainConfig.networkPassphrase,
     rpcUrl: chainConfig.rpcUrl,
-    // Simulation needs *an* account to quote fees against, but it is never
-    // charged and never signs. Any funded account on the network works; this is
-    // the well-known all-zero account the SDK uses for read-only simulation.
-    publicKey: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    // Deliberately omit `publicKey`: the generated SDK then uses its internal
+    // simulation-only null account. Supplying the impossible GAAAA… address
+    // would make it try (and fail) to load that account from Horizon/RPC first.
     allowHttp: RPC_URL.startsWith("http://"),
   });
   return client;

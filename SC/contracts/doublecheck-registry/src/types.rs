@@ -27,12 +27,33 @@ pub const MAX_HANDLE_LEN: u32 = 64;
 pub const MAX_TEXT_LEN: u32 = 128;
 /// Maximum length of a metadata URI.
 pub const MAX_URI_LEN: u32 = 256;
+/// Badges must be renewed at least this often. A small grace over one year
+/// avoids making leap years and scheduling jitter part of the issuer flow.
+pub const MAX_BADGE_LIFETIME: u64 = 400 * 24 * 60 * 60;
+/// A mandate must be reviewed at least annually as well.
+pub const MAX_MANDATE_LIFETIME: u64 = 366 * 24 * 60 * 60;
+/// A controller must accept a proposed badge within this window.
+pub const MAX_ACCEPT_WINDOW: u64 = 30 * 24 * 60 * 60;
+/// Maximum entity and claim records one submitted keeper invocation touches.
+pub const MAX_KEEPALIVE_BATCH: u32 = 50;
 /// Maximum number of claim ids held in one on-chain index vector.
 ///
 /// The index vectors exist so the explorer works with no off-chain indexer at
 /// MVP scale. Past this many claims per entity the caller must read the
 /// contract's events instead.
 pub const MAX_INDEX_LEN: u32 = 512;
+/// Maximum simultaneous live or scheduled confirmations for one exact pair.
+///
+/// This is deliberately lower than the discovery-index bound: resolving each
+/// id reads a separate ledger entry, and Stellar caps a transaction's ledger
+/// footprint. Sixty-four leaves room for linked relationship reads and normal
+/// contract bookkeeping under the network limit.
+pub const MAX_CONFIRMED_PAIR_LEN: u32 = 64;
+/// Maximum mandate records inspected by one strict authorisation read across
+/// the confirmed index and legacy fallbacks. A linked mandate can require a
+/// second ledger read for its relationship, so this keeps the worst case below
+/// Stellar's transaction footprint ceiling.
+pub const MAX_AUTHORISATION_SCAN: u32 = 128;
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -142,9 +163,9 @@ pub enum Confirmation {
 /// A vetted organisation or person.
 ///
 /// The badge is soulbound: `controller` is set at registration and there is no
-/// transfer function. Only the admin can move a badge to a new key
-/// (`rotate_controller`), and only to recover a lost key — the badge can never
-/// be sold or handed to a different subject.
+/// holder-only transfer function. A controller change requires the current
+/// controller, issuer approval and the destination controller, so the holder
+/// and destination cannot move verified status without issuer re-approval.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entity {
@@ -164,20 +185,47 @@ pub struct Entity {
     /// Free-text jurisdiction, e.g. "Germany". Empty if not applicable.
     pub jurisdiction: String,
     /// SHA-256 of the canonical off-chain credential JSON. Lets any reader
-    /// prove the off-chain profile they fetched is the one the issuer signed.
+    /// prove the fetched profile matches the content the issuer anchored and
+    /// vetted.
     pub metadata_hash: BytesN<32>,
     /// Where that credential is served from (https / ipfs).
     pub metadata_uri: String,
-    /// The address that performed the verification. A single operator today, an
-    /// accredited issuer registry later.
+    /// The address that performed the verification. This is the badge's fixed
+    /// lifecycle authority for metadata, renewal, revocation and recovery; a
+    /// later global admin handover does not rewrite it.
     pub issuer: Address,
     pub status: EntityStatus,
     pub verified_at: u64,
-    /// Unix seconds. `0` means no expiry.
+    /// Unix seconds. Always non-zero; trust must be periodically renewed.
     pub expires_at: u64,
     /// Count of upheld complaints. Reputation collateral in place of a cash
     /// stake — see `docs/architecture.md`.
     pub strikes: u32,
+}
+
+/// A vetted badge waiting for the subject/controller to accept it.
+///
+/// Verification happens off-chain first. The issuer then commits the exact
+/// public record, credential hash and terms version here. Nothing becomes a
+/// verified [`Entity`] until `controller` authorises `accept_entity`.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingEntity {
+    pub id: u64,
+    pub kind: EntityKind,
+    pub controller: Address,
+    pub handle: String,
+    pub display_name: String,
+    pub domain: String,
+    pub jurisdiction: String,
+    pub metadata_hash: BytesN<32>,
+    pub metadata_uri: String,
+    pub issuer: Address,
+    /// Hash of the code of conduct / issuance terms accepted by the subject.
+    pub terms_hash: BytesN<32>,
+    pub proposed_at: u64,
+    pub accept_by: u64,
+    pub expires_at: u64,
 }
 
 /// An organisation's attestation about a person's affiliation with it.
@@ -210,7 +258,8 @@ pub struct Relationship {
     pub attested_by: Address,
 }
 
-/// An authorisation for a person to act on an organisation's behalf.
+/// An authorisation for a person or organisation/agency representative to act
+/// on an organisation's behalf.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mandate {
@@ -259,6 +308,17 @@ pub struct Check {
     pub checked_at: u64,
 }
 
+/// Cursor returned by a bounded, submitted storage keepalive invocation.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeepaliveResult {
+    pub next_entity: u64,
+    pub next_claim: u64,
+    pub entities_touched: u32,
+    pub claims_touched: u32,
+    pub done: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Storage keys
 // ---------------------------------------------------------------------------
@@ -268,25 +328,42 @@ pub struct Check {
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    /// Issuing authority. Registers, renews and revokes entities.
+    /// Current authority for new issuance, configuration and upgrades. Existing
+    /// badges keep their own immutable [`Entity::issuer`] authority.
     Admin,
     /// Proposed admin in the two-step handover.
     PendingAdmin,
+    /// Controller proposed by the current controller for an entity. This key is
+    /// retained unchanged so proposals written by an older contract remain
+    /// readable after an upgrade.
+    PendingController(u64),
     /// Address allowed to record the outcome of the off-chain complaint queue.
     Arbiter,
     /// Emergency stop on all writes except admin/arbiter recovery.
     Paused,
     /// Monotonic entity id counter.
     EntityCount,
+    /// Monotonic pending-issuance id counter.
+    PendingEntityCount,
     /// Monotonic claim id counter, shared by relationships and mandates.
     ClaimCount,
 
     /// Entity by id.
     Entity(u64),
+    /// Address that imposed the current entity suspension. An arbiter may lift
+    /// its own hold but cannot undo one imposed by the issuer.
+    EntitySuspendedBy(u64),
     /// Entity id by handle. Enforces handle uniqueness.
     HandleIdx(String),
     /// Entity id by controller address. Enforces one badge per key.
     ControllerIdx(Address),
+
+    /// Pending issuance by proposal id.
+    PendingEntity(u64),
+    /// Proposal id by reserved handle.
+    PendingHandleIdx(String),
+    /// Proposal id by reserved controller.
+    PendingControllerIdx(Address),
 
     /// Relationship by claim id.
     Relationship(u64),
@@ -301,11 +378,26 @@ pub enum DataKey {
     OrgMandates(u64),
     /// Claim ids of mandates held by this representative.
     PersonMandates(u64),
+    /// Claim ids for one organisation/representative pair. This prevents an
+    /// unrelated organisation from crowding a valid pair out of the bounded
+    /// representative-wide index retained for legacy records.
+    PairMandates(u64, u64),
 
-    /// `(org id, representative id)` -> the most recent mandate id between that
-    /// pair. Lets `is_authorised` answer "may this person act for that company
-    /// right now?" in one storage read instead of scanning an index.
+    /// `(org id, representative id)` -> the most recently written mandate id.
+    /// Kept as a fast hint and for backwards compatibility; strict
+    /// `is_authorised` scans the rolling confirmed-pair index, then the legacy
+    /// general pair and representative indexes, so a newer scheduled or
+    /// self-asserted hint cannot mask older live confirmation.
     LiveMandate(u64, u64),
+
+    /// Destination controller the issuer approved for a pending rotation.
+    /// Stored separately from [`DataKey::PendingController`] so upgrading with
+    /// an old unapproved proposal fails closed until the issuer reviews it.
+    ApprovedController(u64),
+    /// Relevant organisation- or issuer-confirmed mandate ids for one pair.
+    /// Inactive and expired entries are pruned; live and scheduled entries are
+    /// never silently evicted. Self-assertions never enter this bounded index.
+    ConfirmedPairMandates(u64, u64),
 }
 
 // ---------------------------------------------------------------------------
@@ -338,9 +430,31 @@ pub enum Error {
     InvalidStatus = 22,
     /// Referenced relationship does not belong to the same org and person.
     RelationshipMismatch = 23,
+    /// Trust badges must expire and pass periodic re-verification.
+    ExpiryRequired = 24,
+    /// The requested badge lifetime exceeds [`MAX_BADGE_LIFETIME`].
+    ExpiryTooFar = 25,
+    /// Natural-person descriptive data belongs in the off-chain credential.
+    PersonalDataNotAllowed = 26,
+    /// Credential locations must be non-empty `https://` or `ipfs://` URIs.
+    InvalidUri = 27,
+    /// Public text contains a control character that can spoof verifier output.
+    InvalidText = 28,
+    /// Credential and terms hashes must be real anchors, not all-zero values.
+    InvalidHash = 29,
 
-    /// Reserved. Indexing is best-effort and no longer fails a write; the
-    /// discriminant is kept so existing error codes do not shift.
+    /// A confirmed pair already has [`MAX_CONFIRMED_PAIR_LEN`] live or
+    /// scheduled mandates. General discovery indexes remain best-effort.
     IndexFull = 30,
     NoPendingAdmin = 31,
+    NoPendingController = 32,
+    PendingEntityNotFound = 33,
+    PendingEntityExpired = 34,
+    InvalidAcceptanceWindow = 35,
+    InvalidBatchSize = 36,
+    /// The destination attempted to accept before the issuer approved the exact
+    /// pending controller address.
+    ControllerRotationNotApproved = 37,
+    /// A mandate cannot authorise an entity to represent itself.
+    SameEntity = 38,
 }

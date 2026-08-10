@@ -8,20 +8,23 @@ import { Panel } from "../components/Panel";
 import { SharePanel } from "../components/SharePanel";
 import { Tabs } from "../components/Tabs";
 import { ClaimRow } from "../components/ClaimRow";
+import { EntityStatusBanner } from "../components/EntityStatusBanner";
+import { ReportButton } from "../components/ReportButton";
+import { CredentialPanel } from "../components/CredentialPanel";
 import { formatDate } from "../lib/format";
 import { NotFound } from "./NotFound";
 
 export function PersonDetail({ personId }: { personId?: string } = {}) {
   const params = useParams();
   const id = personId ?? params.id ?? "";
-  const { getPerson, getRelationshipsForPerson, getMandatesForPerson } = useRegistry();
+  const { getPerson, getRelationshipsForPerson, getMandatesHeldBy } = useRegistry();
   const person = getPerson(id);
   const [tab, setTab] = useState("all");
 
   if (!person) return <NotFound />;
 
   const relationships = getRelationshipsForPerson(person.id);
-  const mandates = getMandatesForPerson(person.id);
+  const mandates = getMandatesHeldBy(person.id);
   const allClaims = [...relationships, ...mandates].sort(
     (a, b) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime(),
   );
@@ -37,16 +40,23 @@ export function PersonDetail({ personId }: { personId?: string } = {}) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold">{person.name}</h1>
-            {person.verified && <VerifiedBadge issuer={person.issuer} />}
+            {person.verified && <VerifiedBadge issuer={person.issuer} label="Verified recruiter" />}
           </div>
           <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">@{person.handle}</div>
         </div>
+        <ReportButton
+          variant="full"
+          target={{ type: "entity", id: person.id, label: `${person.name} (@${person.handle})` }}
+        />
       </div>
+
+      <EntityStatusBanner status={person.status} strikes={person.strikes} />
 
       <Panel>
         <dl className="grid grid-cols-1 divide-y divide-slate-100 text-sm sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-800/70">
           <div className="space-y-3 px-4 py-4">
             <Row label="Entity id" value={`#${person.id}`} />
+            <Row label="Current badge status" value={person.status} />
             <Row label="Controller" value={<HashId value={person.controller} />} />
             <Row label="Verified by" value={<HashId value={person.issuer} />} />
             <Row label="Identity verified since" value={formatDate(person.verifiedAt)} />
@@ -56,9 +66,15 @@ export function PersonDetail({ personId }: { personId?: string } = {}) {
             <Row label="Current & active relationships" value={String(currentCount)} />
             <Row label="Historical relationships" value={String(historicalCount)} />
             <Row label="Mandates held" value={String(mandates.length)} />
+            <Row label="Upheld complaint outcomes" value={String(person.strikes)} />
           </div>
         </dl>
       </Panel>
+
+      <CredentialPanel
+        key={`${person.id}:${person.metadataUri}:${person.metadataHash}`}
+        subject={person}
+      />
 
       <SharePanel subject={person} />
 

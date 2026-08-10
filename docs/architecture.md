@@ -1,356 +1,303 @@
 # Architecture
 
-How the DoubleCheck registry is built, what it stores, and why the boundaries fall where they do.
+This document describes the vNext source and public testnet interface. The existing testnet address
+was upgraded in place on 10 August 2026 and the checked-in binding was regenerated from its live
+specification; see [`deployment.md`](deployment.md#current-environments).
 
-For building and deploying the contract see [`SC/README.md`](../SC/README.md); for the explorer see
-[`FE/README.md`](../FE/README.md); for hosting and operations see [`deployment.md`](deployment.md);
-for what is still outstanding see [`roadmap.md`](roadmap.md).
+## System boundary
 
-## Contents
+DoubleCheck separates public, durable trust decisions from private operational evidence.
 
-- [The problem](#the-problem)
-- [Platform and toolchain](#platform-and-toolchain)
-- [Data model](#data-model)
-- [Trust model](#trust-model)
-- [Confirmation tiers](#confirmation-tiers)
-- [The on-chain boundary](#the-on-chain-boundary)
-- [Personal data](#personal-data)
-- [Lifecycle and derived status](#lifecycle-and-derived-status)
-- [Storage, rent and archival](#storage-rent-and-archival)
-- [Implementing on Soroban](#implementing-on-soroban)
-- [Scope](#scope)
-- [Limitations](#limitations)
+```text
+applicant ──HTTPS──> /apply ──> /api/intake ──> private review webhook/queue
+reporter  ──HTTPS──> report modal ─────────────> private review webhook/queue
+                                                   │
+                                                   │ manual KYC/KYB and case decision
+                                                   ▼
+issuer/controller wallet ──signed transaction──> Soroban registry
+reader ──wallet-free simulation──> Stellar RPC ──> public verifier/live iframe
+keeper ──signed submitted transactions──────────> TTL extension
+```
 
----
+The browser performs public contract reads directly. The Vercel function is used only for private
+application and report intake; it validates a strict JSON shape and forwards accepted payloads to a
+server-only HTTPS webhook. It does not write to the registry. A `202` and reference are returned
+only after the webhook accepts the request; missing configuration returns `503` and downstream
+failure returns `502`.
 
-## The problem
+There is no production indexer, credential issuer, KYC/KYB integration, or automated case system in
+the repository yet.
 
-A recruiter makes contact about a role at a company. Three questions follow, and none of them can
-currently be answered quickly:
+## Why use a ledger
 
-1. Is this person who they claim to be?
-2. Do they actually work for the organisation they name?
-3. Are they authorised to be recruiting for that role, right now?
+A database could render the same screen, but its operator could rewrite who signed a claim or hide a
+revocation. Soroban lets a reader independently establish the controller that authenticated a
+statement and its current status. The ledger is justified only for that tamper-evident trust layer;
+deliberation and sensitive evidence remain off-chain.
 
-Identity alone answers only the first. The third is the one that matters, and it is the one that
-changes over time — a recruiter who legitimately represented a company last quarter may not today.
-An answer that was true when it was written and is never revisited is worth very little.
+This design maps the original EVM plan to Stellar as follows:
 
-The registry therefore records three things rather than one: **who was verified**, **who is
-affiliated with whom**, and **who is authorised to act on whose behalf, until when**. All three are
-revocable within a single transaction, and all three expire without anyone having to act.
-
-### Why this is on a ledger
-
-A database could hold the same records. What it could not do is let a reader verify them without
-trusting the party serving the page.
-
-Every claim in the registry carries the key that signed it. A reader can therefore distinguish a
-mandate the hiring company confirmed with its own key from one the recruiter asserted about
-themselves — and can do so even if the website presenting it is compromised, seized, or lying. That
-property is the entire justification for the ledger. Remove it and a database is the better choice.
-
----
-
-## Platform and toolchain
-
-| Component | Version | Notes |
-|---|---|---|
-| Language | Rust 1.96 | `soroban-sdk` 27 requires ≥ 1.91 |
-| SDK | `soroban-sdk` 27.0.5 | |
-| Build target | `wasm32v1-none` | supersedes `wasm32-unknown-unknown` for Soroban |
-| CLI | `stellar-cli` 27.x | the earlier `soroban` binary is retired |
-| Network | Stellar, protocol 27 | |
-
-### Network limits that shaped the design
-
-Read from mainnet ledger configuration rather than quoted from documentation, since two of them
-constrain the data model directly:
-
-| Setting | Mainnet value | Consequence |
-|---|---|---|
-| `contract_max_size_bytes` | 131,072 (128 KB) | the contract compiles to 38 KB |
-| `contract_data_entry_size_bytes` | 65,536 | bounds the claim-id index vectors |
-| `contract_data_key_size_bytes` | 250 | handles are capped at 64 characters |
-| `min_persistent_ttl` | 2,073,600 ledgers (~120 days) | the floor every new entry receives |
-| `max_entry_ttl` | 3,110,400 ledgers (~180 days) | **no entry can be made to outlive 180 days** |
-
-The last row is load-bearing. Soroban charges rent and archives entries nobody extends, so a badge
-with a twelve-month expiry cannot simply be written and forgotten — see
-[Storage, rent and archival](#storage-rent-and-archival).
-
----
+| EVM concept | Stellar/Soroban design |
+|---|---|
+| Non-transferable NFT badge | `Entity` bound to a controller address; no transfer entry point |
+| Attestation protocol/schema | First-class `Relationship` and `Mandate` contract records |
+| ERC ownership/approval | Soroban address auth and explicit multi-party consent flows |
+| Events/indexer | Soroban contract events, with a future external indexer/API |
+| Transaction relayer | Future passkey smart-account and fee-sponsorship layer; not implemented |
 
 ## Data model
 
-Three record types, defined in [`types.rs`](../SC/contracts/doublecheck-registry/src/types.rs).
+### PendingEntity
+
+The issuer creates a `PendingEntity` only after off-chain review. It commits:
+
+- kind, controller, handle, and allowed public organisation descriptors;
+- issuer, credential hash/URI, and exact terms hash; and
+- proposal time, acceptance deadline, and badge expiry.
+
+The proposal reserves its handle and controller but has no verified status. `accept_by` is at most 30
+days after proposal. The intended controller must authenticate `accept_entity`; only then is an
+active `Entity` created. Issuer or controller may cancel at any time, and any authenticated account
+may release an expired proposal.
+
+The legacy one-step `register_entity` remains for coordinated multi-auth tooling and requires both
+admin and controller authentication. It is not an issuer-only path.
 
 ### Entity
 
-An organisation or a natural person that the issuer has vetted. Entities are identified by a
-sequential `u64` and by a unique URL-safe `handle`.
+An `Entity` is a vetted organisation or natural person with a unique sequential id and URL-safe
+handle.
 
-| Field | Purpose |
+| Field group | Meaning |
 |---|---|
-| `kind` | `Organisation` or `Person` |
-| `controller` | the address this badge is bound to; the key that acts for the entity |
-| `handle` | unique public slug, the verifier's URL segment |
-| `display_name`, `domain`, `jurisdiction` | public descriptive fields — see [Personal data](#personal-data) |
-| `metadata_hash`, `metadata_uri` | SHA-256 of the off-chain credential, and where it is served |
-| `issuer` | the address that performed the verification |
-| `status`, `verified_at`, `expires_at` | badge lifecycle |
-| `strikes` | count of upheld complaints |
+| `kind`, `controller`, `handle` | subject type, controlling address, stable public slug |
+| `display_name`, `domain`, `jurisdiction` | public organisation descriptors; forced empty for people |
+| `metadata_hash`, `metadata_uri` | non-zero SHA-256 anchor and bounded HTTPS/IPFS location of the issuer-vetted credential |
+| `issuer`, `verified_at`, `expires_at` | decision provenance and bounded validity |
+| `status`, `strikes` | current stored lifecycle and upheld-outcome count |
 
-Badges are **soulbound**: `controller` is fixed at registration and there is no transfer function.
-`rotate_controller` exists solely for key recovery and is admin-gated, so verified status cannot be
-sold or transferred to a different subject.
+All badge expiries are non-zero, future-dated, and at most 400 days from issuance/renewal. Renewal is
+a stored-issuer re-verification decision, updates `verified_at`, and can clear suspension. `Revoked`
+is terminal.
+
+The metadata anchor is issuer-controlled. Only that badge's immutable stored issuer may replace its
+hash/URI; a subject or later global admin cannot substitute a different credential while retaining
+the original issuer's trust display.
+Subject-authored profile material must be separate and clearly unverified.
+
+Controller recovery is a three-party flow: the current controller proposes an exact destination,
+the stored issuer approves it after recovery/re-verification, and the destination then accepts.
+Replacing the proposal invalidates any prior approval. The compatibility atomic path likewise
+requires stored-issuer, current-controller, and destination authentication, so neither holder nor
+issuer can unilaterally move a badge.
 
 ### Relationship
 
-An attestation that a person is, or was, affiliated with an organisation: type
-(`CurrentEmployee`, `PastContractor`, `AgencyRepresentative`, …), role, department, start and end
-dates, and a `public_display` flag the subject controls.
+A `Relationship` states that a natural person is or was affiliated with an organisation. It records
+type, a required role, optional department, dates, confirmation, signer, status, optional detail
+hash, and publication choice. A relationship start cannot be future-dated.
 
-Relationships are never deleted. A closed relationship keeps its end date, because "left in March" is
-a materially different answer from "no record found" — and a stale affiliation is a more common
-misrepresentation than an invented one.
+Company-attested relationships are initially unlisted. The subject or admin controls
+`public_display`; a subject can publish its own self-assertion. The public frontend omits unpublished
+relationships from snapshots, search, feeds, and detail fetches.
 
 ### Mandate
 
-An authorisation for a representative to act on an organisation's behalf: type, scope, territory,
-and a validity window. Mandates are always time-bound; `valid_until` cannot be zero.
+A `Mandate` states that a person or another organisation may represent a different organisation for
+a type, required scope, optional territory, and fixed time window. Its duration is at most 366 days.
+It can stand alone (`relationship = 0`) or reference a relationship between exactly the same
+parties.
 
-A mandate may optionally reference the relationship it rests on, in which case the contract enforces
-that the relationship is between the same two parties. A representative may be a person or another
-organisation, which is how an agency holding a mandate from a client company is represented.
+Relationships and mandates share one claim-id sequence. General per-entity indexes make a small
+registry readable without a backend and retain at most 512 ids; later records still exist and emit
+events even when browser history discovery is full. Strict authorisation uses a separate bounded
+organisation/representative index containing at most 64 relevant company- or issuer-confirmed
+mandates. It prunes closed or expired entries and rejects a new relevant confirmation if every slot
+is still live or scheduled, so capacity cannot silently turn a valid authorisation into a false
+negative. Strict discovery has a shared 128-record scan budget across that index and legacy
+fallbacks. Production scale still requires an event indexer and a policy well before a pair
+approaches the contract limit.
 
-Relationships and mandates share a single claim-id sequence, so one identifier is enough to resolve
-any claim.
+## Trust and consent model
 
----
+### Roles
 
-## Trust model
-
-Three roles, all addresses, all configurable after deployment.
-
-| Role | Capabilities |
+| Role | Capabilities and limits |
 |---|---|
-| **admin** | registers, renews, suspends and revokes entities; rotates controllers; upgrades the contract |
-| **entity controller** | attests its own organisation's relationships and mandates; withdraws claims about itself |
-| **arbiter** | records the outcome of the off-chain complaint process — disputes, suspensions, strikes. **Cannot revoke** |
+| global admin | propose new badges, record issuer-confirmed claims, manage global roles/pause, and upgrade; a handover affects future issuance but does not inherit old badges |
+| stored badge issuer | renew/revoke its badge, replace its vetted metadata anchor, suspend it, approve recovery, and record strikes; authority is fixed when the badge is accepted |
+| entity controller | accept its badge, attest claims in its role, withdraw claims about itself, propose its own controller migration |
+| arbiter | record complaint outcomes, strikes, disputes, and suspensions; cannot revoke or strengthen claims |
+| keeper | no registry role; submits and pays for bounded `keepalive` calls |
 
-Constraints worth stating explicitly:
+Admin transfer is two-step. Pause prevents new onboarding/claims while status/takedown paths remain
+available.
 
-- **The admin cannot forge a company confirmation.** A claim the admin writes is recorded as
-  `IssuerConfirmed`, never `CounterpartyConfirmed`. The distinction is visible to every reader.
-- **`Revoked` is terminal, and admin-only.** A revoked badge cannot be reinstated by anyone, because
-  a reader who saw "revoked" must never be contradicted later. Re-admitting a subject means issuing
-  a new entity. The arbiter can suspend a badge while a case is open and restore it afterwards, but
-  cannot reach the irreversible state — a compromised complaint key must not be able to destroy the
-  registry.
-- **A subject can always withdraw a claim about themselves**, and only the subject or the admin can
-  change a relationship's `public_display`. An organisation cannot pin a public statement about a
-  person against their will.
-- **Admin handover is two-step** (`propose_admin` / `accept_admin`), so a mistyped address cannot
-  lock the registry.
-- **Pausing does not block revocation.** The emergency stop blocks new registrations and new claims;
-  status changes keep working, because pausing must never prevent taking a bad badge down.
+### Confirmation tiers
 
----
+The contract derives confirmation from the authenticated signer:
 
-## Confirmation tiers
-
-Every claim records which key signed it, and the contract classifies the signer rather than letting
-the caller assert it:
-
-| Signer | Recorded as | What a reader can conclude |
+| Signer | Confirmation | Authorisation weight |
 |---|---|---|
-| the organisation's controller | `CounterpartyConfirmed` | the organisation itself stated this |
-| the subject's own controller | `SelfAsserted` | only the subject states this; their badge is the collateral |
-| the admin | `IssuerConfirmed` | the issuer verified it out of band — DNS record, email-domain challenge, light KYB |
+| subject/representative controller | `SelfAsserted` | visible evidence only |
+| organisation controller | `CounterpartyConfirmed` | accepted by strict mandate verification |
+| admin/issuer | `IssuerConfirmed` | accepted by strict mandate verification |
 
-This is what allows the registry to serve both directions of trust without picking one. A recruiter
-can list where they work without waiting for their employer to hold a key, and a reader can still
-see that nobody but the recruiter said so. `IssuerConfirmed` is how an organisation with no wallet,
-and no interest in acquiring one, is represented — which will be most organisations for a long time.
+An issuer-confirmed claim is distinguishable from a company-controller claim. The admin cannot make
+its own statement appear counterparty-confirmed.
 
----
+### Strict mandate authorisation
 
-## The on-chain boundary
+`is_authorised(org, representative)` returns true only when:
 
-The governing principle: **the ledger stores decisions, not deliberations.**
+1. both entities exist, are active, and have not expired;
+2. a mandate for exactly that pair is stored as active and is within its validity window;
+3. its confirmation is counterparty- or issuer-confirmed, never self-asserted; and
+4. a linked relationship, if present, exists, matches the same parties, has subject/admin
+   publication consent, and is effectively active.
 
-The test for any given field: *if the operator's website were seized, replaced, or lying, would a
-reader still need this to protect themselves?* If yes, it belongs on-chain. If no, it is a database
-row.
+The contract scans the pair mandate index newest-to-oldest and skips ineligible records, so a newer
+scheduled, withdrawn, expired, or self-asserted record does not mask an older live confirmation. A
+representative-wide fallback preserves discovery of legacy pre-upgrade mandates.
 
-### On-chain
+The pair verifier in the frontend also displays the badge, date, confirmation, and relationship
+dependencies and requires the deployed contract's direct `is_authorised` result before showing its
+strongest verdict.
 
-| | Why |
-|---|---|
-| Who was verified, by whom, when, until when | the claim being made |
-| Status, and every change to it | a revocation nobody can quietly reverse |
-| Which key signed each claim | the property that distinguishes this from a database |
-| Mandate scope and validity window | the authorisation itself |
-| A hash of the off-chain credential | proves a fetched profile is the one the issuer signed |
+### Status authority and terminal states
 
-### Off-chain
+- `Revoked` is terminal and stored-issuer-only.
+- An arbiter can lift only a suspension that arbiter placed, not an issuer/admin suspension.
+- A subject may withdraw a claim about itself but cannot activate, confirm, or complete it.
+- An arbiter may dispute, suspend, or withdraw, but cannot activate or complete.
+- An organisation cannot clear an arbiter-created dispute/suspension itself.
+- Relationship `Ended`/`Withdrawn` and mandate `Completed`/`Withdrawn` are terminal. A renewed or
+  changed assertion is a new claim.
+- `Expired` is derived from timestamps and is never written as a stored status.
 
-| | Why |
-|---|---|
-| Complaint reports and the review queue | an unreviewed accusation is not a fact; publishing raw reports immutably is defamation exposure with no corresponding benefit. `add_strike` and `set_entity_status` record the *outcome* |
-| Verification evidence — ID documents, liveness checks, KYB reports, references | never appropriate for a public ledger |
-| Billing and subscriptions | no on-chain behaviour depends on payment state |
-| Search, listings, activity feeds | cheap and flexible off-chain, expensive and rigid on-chain |
-| Names, headlines, logos | see [Personal data](#personal-data) |
+## Privacy boundary
 
----
+The ledger stores decisions, not deliberations.
 
-## Personal data
+### Public on-chain data
 
-Stellar ledger entries are public and effectively permanent. The GDPR grants data subjects a right to
-erasure. These cannot both be satisfied for the same field, so the registry separates them.
+- controllers, handles, issuer, timestamps, status, strikes, and event history;
+- organisation descriptors;
+- credential and detail hashes plus credential URI;
+- relationship type, role, department, dates, signer, confirmation, and publication flag; and
+- mandate type, scope, territory, validity, signer, and confirmation.
 
-**Organisations** store `display_name`, `domain` and `jurisdiction` in cleartext. A registered
-company name is not personal data, and this lets organisation pages render entirely from the ledger.
+For a person, the contract enforces empty `display_name`, `domain`, and `jurisdiction`. The name, ID
+documents, liveness/KYB evidence, contact details, applications, and raw complaints belong off-chain
+where retention and erasure controls are possible.
 
-**Natural persons** are registered with `display_name` left empty. On-chain there is then only an
-address, a handle, dates and a hash; the name is served from the off-chain credential at
-`metadata_uri`. Erasure means deleting that document, after which the on-chain hash is a commitment
-to a document that no longer exists — the conventional resolution.
+This is a boundary, not a claim of GDPR completion. Handles, addresses, timestamps, hashes, and the
+free-text `role`, `department`, `scope`, and `territory` can identify a person and remain publicly
+durable. A legal basis, minimisation policy, retention schedule, data-subject process, and a decision
+on moving claim text behind encrypted/off-chain disclosures are still required before production.
 
-**Free-text claim fields** — `role`, `department`, `scope`, `territory` — are stored on-chain and do
-constitute employment data about an identified person. They are capped at 128 characters and are
-paired with `detail_hash` and `public_display`. Moving them off-chain behind `detail_hash` requires
-no change to the contract's shape, should legal review call for it.
+The frontend credential panel fetches a user-requested public HTTPS document of at most 512 KiB and
+compares its SHA-256 hash (raw bytes or canonical JSON) to the on-chain anchor. This checks integrity
+only. It does not validate a W3C VC proof suite, issuer signature, revocation list, or selective
+disclosure. Fetch is manual because it reveals the reader's IP address to the credential host.
 
-The contract does not enforce any of this. It is a policy the issuer applies at registration, and it
-is far cheaper to settle before the first cohort than after.
+### Private off-chain data
 
----
+- application and KYC/KYB evidence;
+- contact details and controller onboarding communication;
+- complaint allegations and attachments;
+- review notes, policy reasoning, appeals, billing, and internal access logs.
 
-## Lifecycle and derived status
+The intake endpoint is merely transport into a private webhook. It caps requests at 16 KiB, rejects
+unknown fields and invalid values, applies a honeypot, and creates references only on successful
+delivery. It is not a review database or workflow, and no complaint is treated as fact on-chain until
+an authorised outcome transaction is submitted.
 
-Expiry is **derived at read time, never stored.** A badge past `expires_at` reads as `Expired`; a
-mandate past `valid_until` reads as `Expired`; a relationship past its end date does the same. No
-keeper job, no scheduled transaction, and no window in which a lapsed badge still reads as valid
-because nobody ran the sweep.
+## New-user onboarding and private case lifecycle
 
-The same rule is reimplemented in the explorer so a page render does not cost an extra round trip per
-record. The contract remains authoritative; the duplication is noted in
-[`FE/README.md`](../FE/README.md).
+The intended operating flow is longer than the public form:
 
-Revocation is immediate and propagates without enumeration. `is_authorised(org, representative)`
-checks the mandate *and* both parties' badges, so revoking an organisation invalidates every mandate
-it issued in one transaction, rather than requiring each to be cancelled individually.
+1. `Received` — create a private case from `/apply`, reserve no on-chain trust, and return only an
+   intake reference.
+2. `Triage` — deduplicate the applicant, select the person/agency/company path, and request the
+   minimum evidence needed for that risk tier.
+3. `Under review` — check identity/liveness, professional history, work email, references, and, for
+   organisations, legal existence plus domain/signatory authority. Store provider references and
+   decisions rather than raw identity documents wherever possible.
+4. `Approved` or `rejected` — record reviewer, reason code, assurance level, policy/terms versions,
+   audit timestamps, retention/deletion dates, and any required second approval. Rejection creates
+   no badge.
+5. `Proposed` — issue the exact off-chain credential, anchor its canonical hash and terms hash in a
+   pending Soroban record, and notify the intended controller. This is still not a verified badge.
+6. `Accepted` — the controller authenticates before the deadline; only this action activates the
+   public badge. Add affiliations and mandates as separate, attributable records afterward.
+7. `Monitored` — notify before expiry (for example 60/30/7 days), reverify before renewal, and route
+   complaints through private triage, response, decision, correction, and appeal states.
 
----
+Agency seats must remain separate person badges: an organisation verifies its authorised operator,
+invites individual recruiters, and signs affiliations or mandates from an organisation-controlled
+key. A company-confirmed mandate requires the company controller; a domain/email/KYB check performed
+only by DoubleCheck is labelled issuer-confirmed, never company-confirmed.
 
-## Storage, rent and archival
+The repository currently implements the public application transport and contract consent model,
+not this durable case store, reviewer console, evidence integrations, notifications, billing, or
+appeals operation. Application payloads and complaint allegations must never be copied into Soroban
+free text or events.
 
-Soroban charges rent, and `max_entry_ttl` is roughly 180 days — shorter than a twelve-month badge.
+## Lifecycle and expiry
 
-The contract's approach: **every read extends the entries it touched.** A badge anyone is actively
-checking stays live, paid for by the reads that check it. Attention pays for storage.
+Business expiry is evaluated using the ledger timestamp. No scheduled transaction is required for a
+badge, relationship, or mandate to stop verifying when its stated window closes. Revoking an entity
+also makes its outstanding mandates fail strict authorisation without enumerating every mandate.
 
-The consequence to plan for: an entry nobody reads for ~120 days is archived and must be restored
-with a `RestoreFootprint` operation before the next read succeeds. Archival is recoverable, not
-destructive. Two viable policies:
+Storage archival is separate. Soroban contract data has ledger TTL even if business validity is
+longer. The contract requests extensions when storage helpers are executed, but an RPC simulation
+does not commit those changes. Wallet-free verifier traffic therefore does **not** keep records alive.
 
-- **Accept it** — a badge nobody has checked in four months is arguably dormant. The verifier needs a
-  restore path in its UI.
-- **Sweep it** — a scheduled job calling `check()` across all handles keeps the registry warm for a
-  few cents. Appropriate at small scale.
+The permissionless `keepalive` entry point touches bounded slices of entities and claims (`1..50`
+attempts for each category per call) and returns resumable cursors. It must be signed and submitted;
+the transaction source pays the fee. Operations must schedule calls until `done`, retry and monitor
+them, and separately restore any entries that already archived. See
+[`deployment.md`](deployment.md#ttl-and-archival-operations).
 
-The on-chain index vectors (`relationships_about`, `mandates_held_by`, and so on) let the explorer
-work with no backend at all and are capped at 512 claim ids per entity. Beyond that, the contract
-emits an event on every state change — `EntityRegistered`, `EntityStatusSet`,
-`RelationshipAttested`, `MandateIssued`, `ClaimStatusSet`, `StrikeAdded`, `ControllerRotated` —
-which is what an indexer should consume.
+## Frontend surfaces
 
-Reaching the cap is **not** an error: the claim is written and remains readable by id, and only the
-index stops growing. Failing the write instead would be a griefing vector, because
-`attest_relationship` indexes against the subject as well as the attester and index entries cannot
-be removed — one verified organisation could otherwise fill a person's index and permanently prevent
-every other organisation from attesting anything about them.
+- public explorer, handle/entity/claim pages, search, and status-aware banners;
+- direct organisation/representative mandate verifier at `/verify`;
+- live iframe at `/badge/<handle>` plus QR and neutral link/embed carriers;
+- manual public credential hash comparison;
+- role-aware application at `/apply` and private report intake;
+- an expert/testnet Freighter holder dashboard for relationship, mandate, subject publication, and
+  withdrawal writes.
 
----
+The holder dashboard requires wallet/network checks, exact transaction review, simulation, signing,
+submission, and final-ledger confirmation; a simulation result alone is not success. Issuer and
+arbiter consoles, fee sponsorship, and passkey accounts remain future work.
 
-## Implementing on Soroban
+The current explorer reconstructs the registry by walking counters and fetching records. It refreshes
+periodically and on visibility changes, but this approach is unsuitable beyond a small demo. Events
+are the source for a future indexed API and status history.
 
-Three differences from the EVM equivalents of this design are worth recording, because they change
-the implementation rather than merely the syntax.
+## Deployment compatibility
 
-**Soulboundness is enforced by absence, not by a standard.** Soroban has no NFT standard to make
-non-transferable, so there is no `ERC-5484` analogue to inherit. An entity is bound to its
-`controller` at registration and the contract exposes no transfer function at all. The property
-holds more robustly than the EVM version: there is no inherited transfer path that must be
-remembered and overridden.
+Repository source, public testnet Wasm, and generated TypeScript binding now share the vNext
+interface. The in-place upgrade preserved 5 demonstration entities and 8 claims. Post-upgrade reads
+confirmed entity/claim counts, all five entity records, authorities, and new onboarding exports.
 
-**There is no attestation service to build on.** On EVM chains the Ethereum Attestation Service would
-supply the mandate layer. Soroban has no equivalent, so this contract *is* the attestation service —
-which is why `Mandate` is a first-class record with its own validity semantics rather than a schema
-registered elsewhere. Marginally more code, one fewer external dependency, and the semantics are
-defined here rather than inherited.
+Future releases must repeat the same discipline: build/test the exact Wasm, rehearse compatibility,
+wait for finality, regenerate bindings from the live contract, rebuild the frontend, and run
+invariant/smoke checks. Testnet fixtures remain demonstrations, not proof of operational verification.
 
-**Passkey smart wallets remove the adoption barrier.** The design depends on a subject holding a key,
-and requiring a seed phrase would end adoption outside crypto-native audiences. Stellar's Protocol 21
-secp256r1 support means a controller key can be a WebAuthn credential in a device's secure enclave —
-Face ID or a fingerprint, no seed phrase. Readers need no key at all, since every read is a
-simulation.
+## Remaining limitations
 
----
+- no independent production audit or formal verification;
+- no complete KYC/KYB provider, review queue, evidence vault, policy, or appeals operation;
+- no W3C proof-suite verification, selective-disclosure cryptography, or issuer key discovery;
+- no indexer/API, scalable search, browser extension, or status-history service;
+- no production passkey smart accounts, recovery design, or fee sponsorship;
+- no complete issuer/controller write dashboard;
+- public on-chain free text and the 512-entry per-entity/pair index visibility limit require resolution;
+- public RPC availability and scheduled TTL/restore operations need production ownership.
 
-## Distribution
-
-A registry entry nobody can reach is worth very little. The reader arrives from somewhere — usually
-from the person being checked — so the explorer generates three carriers for every entity:
-
-- **A handle link**, `/<handle>`, which is what goes in an email signature and gets read out on a
-  call. Handles are also stable across a redeployment, where entity ids would not be.
-- **A QR code**, for showing on a video call or pasting into a message; it opens the verifier in any
-  phone camera.
-- **HTML and Markdown embeds** for signatures, profiles and documentation.
-
-Every carrier resolves to the live verifier rather than encoding a result. A badge image that
-asserted "verified" on its own would keep asserting it after a revocation, which is precisely the
-failure this registry exists to prevent.
-
-## Scope
-
-Implemented: the trust loop end to end — register, attest, authorise, check, revoke, expire — with a
-full test suite.
-
-Deliberately not implemented, with the reasoning:
-
-| | Status | Why |
-|---|---|---|
-| Cash staking and slashing | replaced by `strikes` | reputation slashing needs no custody, refunds, or token contract, and demand is unproven |
-| W3C Verifiable Credential issuance | `metadata_hash` + `metadata_uri` only | those two fields are the anchor a VC needs; adding real credentials later requires no contract change |
-| Badge tiers | folded into `confirmation` | tiers reduced to billing plus a field that already exists; a `tier` enum is an additive change |
-| Browser extension, KYB integrations, dashboards | out of scope | consumers of this contract, not part of it |
-| Fee collection, batch operations, on-chain search | out of scope | additive; none requires reshaping what exists |
-
----
-
-## Limitations
-
-Sequenced, with what unblocks each, in [`roadmap.md`](roadmap.md).
-
-**Not audited.** A security review of the authorisation paths, and a rehearsal of the upgrade path on
-testnet, should both precede any mainnet deployment.
-
-**The explorer does not scale.** It reconstructs the registry by walking ids `1..entity_count` and
-`1..claim_count` on every page load, which is honest at MVP size and wrong beyond a few hundred
-records. The contract's event stream exists so an indexer can replace this; nothing above
-`FE/src/data/` would change.
-
-**Status history is not stored.** Every change emits an event, but the contract keeps no timeline, so
-the explorer shows only what a record itself proves. An indexer would resolve this.
-
-**Index vectors are capped** at 512 claim ids per entity. Past that a claim is still written and
-still readable by id, but does not appear in index reads; the event stream remains complete.
-
-**Free RPC is a single point of failure.** Each page load makes roughly
-`entity_count + 2 × claim_count` simulated reads against a public endpoint with no uptime guarantee.
-See [`deployment.md`](deployment.md).
+See [`roadmap.md`](roadmap.md) for sequencing and [`SECURITY.md`](../SECURITY.md) for the security
+boundary.

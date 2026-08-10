@@ -23,6 +23,10 @@ export function ClaimDetail() {
   const person = getPerson(subjectId) ?? getOrganisation(subjectId);
   const isRelationship = claim.kind === "relationship";
   const typeLabel = isRelationship ? claim.type.replace(/([a-z])([A-Z])/g, "$1 $2") : claim.mandateType;
+  const displayStatus =
+    !isRelationship && claim.confirmation === "SelfAsserted" && claim.status === "Active"
+      ? "Proposed"
+      : claim.status;
   const relatedRelationship =
     !isRelationship && claim.relationshipId ? getRelationship(claim.relationshipId) : undefined;
 
@@ -35,12 +39,16 @@ export function ClaimDetail() {
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="font-mono text-base font-semibold sm:text-lg">Claim #{claim.id}</h1>
-            <StatusPill status={claim.status} size="md" />
+            <StatusPill status={displayStatus} size="md" />
           </div>
         </div>
         <ReportButton
           variant="full"
-          subjectLabel={`${typeLabel} — ${org?.name ?? ""} → ${person?.name ?? ""}`}
+          target={{
+            type: "claim",
+            id: claim.id,
+            label: `${typeLabel} — ${org?.name ?? ""} → ${person?.name ?? ""}`,
+          }}
         />
       </div>
 
@@ -73,10 +81,13 @@ export function ClaimDetail() {
               {claim.department && <Row label="Department">{claim.department}</Row>}
               <Row label="Start date">{formatDate(claim.startDate)}</Row>
               <Row label="End date">{claim.endDate ? formatDate(claim.endDate) : "Ongoing"}</Row>
-              <Row label="Public display">{claim.publicDisplay ? "Permitted by subject" : "Private"}</Row>
+              <Row label="Verifier listing">
+                {claim.publicDisplay ? "Permitted by subject" : "Not listed (still public on Stellar)"}
+              </Row>
             </>
           ) : (
             <>
+              <Row label="Ledger claim status">{claim.ledgerStatus}</Row>
               <Row label="Scope">{claim.scope}</Row>
               {claim.territory && <Row label="Territory">{claim.territory}</Row>}
               <Row label="Valid from">{formatDate(claim.validFrom)}</Row>

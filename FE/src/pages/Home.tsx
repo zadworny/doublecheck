@@ -15,14 +15,20 @@ export function Home() {
     relationships,
     mandates,
     getLatestClaims,
-    getLatestOrganisations,
     getRelationshipsForOrganisation,
     getMandatesForOrganisation,
   } = useRegistry();
 
   const latestClaims = getLatestClaims(8);
-  const latestOrgs = getLatestOrganisations(6);
-  const activeMandates = mandates.filter((m) => m.status === "Active").length;
+  const latestOrgs = organisations
+    .filter((organisation) => organisation.verified)
+    .sort((a, b) => Number(b.id) - Number(a.id))
+    .slice(0, 6);
+  const verifiedOrganisations = organisations.filter((organisation) => organisation.verified).length;
+  const verifiedPeople = people.filter((person) => person.verified).length;
+  const activeMandates = mandates.filter(
+    (mandate) => mandate.status === "Active" && mandate.confirmation !== "SelfAsserted",
+  ).length;
 
   // Sample handles so an empty search box is never a dead end.
   const examples = [
@@ -40,13 +46,27 @@ export function Home() {
           className="animate-rise-in max-w-xl text-sm text-slate-500 dark:text-slate-400 sm:text-base"
           style={{ animationDelay: "80ms" }}
         >
-          Every claim below is confirmed by a verified organisation, signed, time-bound and publicly checkable —
-          no account, wallet or blockchain knowledge required.
+          Read the current badge, signer and time-bound mandate directly from Stellar. Company-confirmed,
+          issuer-confirmed and self-asserted claims are kept visibly distinct — no account or wallet required.
         </p>
         <div className="animate-rise-in flex w-full justify-center" style={{ animationDelay: "180ms" }}>
           <div className="animate-search-glow w-full max-w-2xl">
             <SearchBar size="large" autoFocus />
           </div>
+        </div>
+        <div className="animate-rise-in flex flex-wrap justify-center gap-2" style={{ animationDelay: "240ms" }}>
+          <Link
+            to="/verify"
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500"
+          >
+            Check a mandate
+          </Link>
+          <Link
+            to="/apply"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-400 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            Apply for verification
+          </Link>
         </div>
         {examples.length > 0 && (
           <div
@@ -72,7 +92,7 @@ export function Home() {
           className="animate-rise-in"
           style={{ animationDelay: "380ms" }}
           label="Verified organisations"
-          value={organisations.length}
+          value={verifiedOrganisations}
           icon={
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01" strokeLinecap="round" strokeLinejoin="round" />
@@ -83,7 +103,7 @@ export function Home() {
           className="animate-rise-in"
           style={{ animationDelay: "440ms" }}
           label="Verified people"
-          value={people.length}
+          value={verifiedPeople}
           icon={
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" strokeLinecap="round" strokeLinejoin="round" />
@@ -104,7 +124,7 @@ export function Home() {
         <StatCard
           className="animate-rise-in"
           style={{ animationDelay: "560ms" }}
-          label="Active mandates"
+          label="Live confirmed mandates"
           value={activeMandates}
           icon={
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -129,7 +149,7 @@ export function Home() {
                         <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">#{org.id}</span>
                       </div>
                       <div className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        Verified {formatDate(org.verifiedAt)} · {count} claims confirmed
+                        Verified {formatDate(org.verifiedAt)} · {count} public claims listed
                       </div>
                     </div>
                     <svg

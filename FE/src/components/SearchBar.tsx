@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { useRegistry, type SearchResult } from "../data";
+import { useOptionalRegistry, type SearchResult } from "../data";
 import { Identicon } from "./Identicon";
 
 interface SearchBarProps {
@@ -21,7 +21,7 @@ export function SearchBar({
   placeholder = "Search by name, handle, domain or claim id...",
   autoFocus = false,
 }: SearchBarProps) {
-  const { search } = useRegistry();
+  const registry = useOptionalRegistry();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -30,7 +30,7 @@ export function SearchBar({
   const navigate = useNavigate();
   const isLarge = size === "large";
 
-  const results = search(query).slice(0, 7);
+  const results = registry ? registry.search(query).slice(0, 7) : [];
   const showDropdown = focused && query.trim().length > 0;
 
   useEffect(() => {
@@ -178,7 +178,9 @@ export function SearchBar({
         >
           {results.length === 0 ? (
             <div className="px-4 py-3 text-left text-sm text-slate-500 dark:text-slate-400">
-              No matches for "{query}" — press Enter to search everything.
+              {registry
+                ? `No matches for "${query}" — press Enter to search everything.`
+                : "Press Enter to load the registry and search."}
             </div>
           ) : (
             <ul className="max-h-80 overflow-y-auto py-1">

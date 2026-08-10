@@ -17,6 +17,10 @@ export function ClaimRow({ claim }: ClaimRowProps) {
   // A mandate holder can be an agency rather than a natural person.
   const person = getPerson(subjectId) ?? getOrganisation(subjectId);
   const typeLabel = claim.kind === "relationship" ? claim.type.replace(/([a-z])([A-Z])/g, "$1 $2") : claim.mandateType;
+  const displayStatus =
+    claim.kind === "mandate" && claim.confirmation === "SelfAsserted" && claim.status === "Active"
+      ? "Proposed"
+      : claim.status;
 
   return (
     <div className="space-y-2 border-b border-slate-100 px-3 py-3 text-sm last:border-b-0 hover:bg-slate-50/70 dark:border-slate-800/70 dark:hover:bg-slate-900/40 sm:px-4">
@@ -44,9 +48,15 @@ export function ClaimRow({ claim }: ClaimRowProps) {
               Self-asserted
             </span>
           )}
-          <StatusPill status={claim.status} />
+          <StatusPill status={displayStatus} />
           <span className="hidden text-xs text-slate-400 md:inline">{formatRelative(claim.confirmedAt)}</span>
-          <ReportButton subjectLabel={`${typeLabel} — ${org?.name ?? ""} → ${person?.name ?? ""}`} />
+          <ReportButton
+            target={{
+              type: "claim",
+              id: claim.id,
+              label: `${typeLabel} — ${org?.name ?? ""} → ${person?.name ?? ""}`,
+            }}
+          />
         </div>
       </div>
 

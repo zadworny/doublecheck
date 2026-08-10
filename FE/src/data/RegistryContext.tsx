@@ -13,9 +13,9 @@ export interface SearchResult {
 /**
  * The whole registry, plus the lookups the pages need.
  *
- * The snapshot is read once from the contract and held in memory. Everything
- * below it is a pure function of that snapshot, so the pages stay synchronous
- * and there is exactly one loading state in the app.
+ * A snapshot is held in memory and refreshed periodically. Everything below
+ * it is a pure function of that snapshot, so pages stay synchronous while a
+ * revoked or newly-expired record cannot remain green indefinitely.
  */
 export interface Registry extends RegistrySnapshot {
   getOrganisation(id: string): Organisation | undefined;
@@ -30,7 +30,9 @@ export interface Registry extends RegistrySnapshot {
   getRelationshipsForOrganisation(id: string): Relationship[];
   getRelationshipsForPerson(id: string): Relationship[];
   getMandatesForOrganisation(id: string): Mandate[];
-  getMandatesForPerson(id: string): Mandate[];
+  /** Mandates held by either a person or an organisation acting as an agency. */
+  getMandatesHeldBy(id: string): Mandate[];
+  getMandatesBetween(organisationId: string, representativeId: string): Mandate[];
   getLatestClaims(limit?: number): Claim[];
   getLatestOrganisations(limit?: number): Organisation[];
   search(query: string): SearchResult[];
@@ -46,27 +48,50 @@ export function useRegistry(): Registry {
   return registry;
 }
 
+/** Chrome can remain usable on registry-independent routes during an RPC outage. */
+export function useOptionalRegistry(): Registry | null {
+  return useContext(RegistryContext);
+}
+
 function buildRegistry(snapshot: RegistrySnapshot, refresh: () => void): Registry {
-  const orgById = new Map(snapshot.organisations.map((o) => [o.id, o]));
-  const personById = new Map(snapshot.people.map((p) => [p.id, p]));
+  // Defence in depth: loaders should already omit unpublished relationships,
+  // but the public context enforces the boundary too so a future API/indexer
+  // cannot accidentally make them reachable through a getter or feed.
+  const publicSnapshot: RegistrySnapshot = {
+    ...snapshot,
+    relationships: snapshot.relationships.filter((relationship) => relationship.publicDisplay),
+    claims: snapshot.claims.filter(
+      (claim) => claim.kind !== "relationship" || claim.publicDisplay,
+    ),
+  };
+
+  const orgById = new Map(publicSnapshot.organisations.map((o) => [o.id, o]));
+  const personById = new Map(publicSnapshot.people.map((p) => [p.id, p]));
   const byHandle = new Map<string, Organisation | Person>([
-    ...snapshot.organisations.map((o) => [o.handle, o] as const),
-    ...snapshot.people.map((p) => [p.handle, p] as const),
+    ...publicSnapshot.organisations.map((o) => [o.handle, o] as const),
+    ...publicSnapshot.people.map((p) => [p.handle, p] as const),
   ]);
   // The snapshot is a complete walk of every entity, so a controller can be
   // resolved locally — no extra contract round trip for `/me`.
   const byController = new Map<string, Organisation | Person>([
-    ...snapshot.organisations.map((o) => [o.controller, o] as const),
-    ...snapshot.people.map((p) => [p.controller, p] as const),
+    ...publicSnapshot.organisations.map((o) => [o.controller, o] as const),
+    ...publicSnapshot.people.map((p) => [p.controller, p] as const),
   ]);
-  const relById = new Map(snapshot.relationships.map((r) => [r.id, r]));
-  const mandateById = new Map(snapshot.mandates.map((m) => [m.id, m]));
+  const relById = new Map(publicSnapshot.relationships.map((r) => [r.id, r]));
+  const mandateById = new Map(publicSnapshot.mandates.map((m) => [m.id, m]));
 
-  const byConfirmedAtDesc = <T extends { confirmedAt: string }>(a: T, b: T) =>
-    new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime();
+  const byConfirmedAtDesc = <T extends { confirmedAt: string; id: string }>(a: T, b: T) => {
+    const byTime = new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime();
+    if (byTime !== 0) return byTime;
+    // Several transactions may share one ledger timestamp. Claim ids are
+    // monotonic, so use them to preserve the contract's "newest mandate" rule.
+    const aId = BigInt(a.id);
+    const bId = BigInt(b.id);
+    return aId === bId ? 0 : aId < bId ? 1 : -1;
+  };
 
   return {
-    ...snapshot,
+    ...publicSnapshot,
     refresh,
     getOrganisation: (id) => orgById.get(id),
     getByHandle: (handle) => byHandle.get(handle.toLowerCase()),
@@ -77,24 +102,32 @@ function buildRegistry(snapshot: RegistrySnapshot, refresh: () => void): Registr
     getClaim: (id) => relById.get(id) ?? mandateById.get(id),
 
     getRelationshipsForOrganisation: (id) =>
-      snapshot.relationships.filter((r) => r.organisationId === id).sort(byConfirmedAtDesc),
+      publicSnapshot.relationships.filter((r) => r.organisationId === id).sort(byConfirmedAtDesc),
     getRelationshipsForPerson: (id) =>
-      snapshot.relationships.filter((r) => r.personId === id).sort(byConfirmedAtDesc),
+      publicSnapshot.relationships.filter((r) => r.personId === id).sort(byConfirmedAtDesc),
     getMandatesForOrganisation: (id) =>
-      snapshot.mandates.filter((m) => m.organisationId === id).sort(byConfirmedAtDesc),
-    getMandatesForPerson: (id) =>
-      snapshot.mandates.filter((m) => m.representativeId === id).sort(byConfirmedAtDesc),
+      publicSnapshot.mandates.filter((m) => m.organisationId === id).sort(byConfirmedAtDesc),
+    getMandatesHeldBy: (id) =>
+      publicSnapshot.mandates.filter((m) => m.representativeId === id).sort(byConfirmedAtDesc),
+    getMandatesBetween: (organisationId, representativeId) =>
+      publicSnapshot.mandates
+        .filter(
+          (mandate) =>
+            mandate.organisationId === organisationId &&
+            mandate.representativeId === representativeId,
+        )
+        .sort(byConfirmedAtDesc),
 
-    getLatestClaims: (limit = 8) => [...snapshot.claims].sort(byConfirmedAtDesc).slice(0, limit),
+    getLatestClaims: (limit = 8) => [...publicSnapshot.claims].sort(byConfirmedAtDesc).slice(0, limit),
     getLatestOrganisations: (limit = 8) =>
-      [...snapshot.organisations].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, limit),
+      [...publicSnapshot.organisations].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, limit),
 
     search(rawQuery: string): SearchResult[] {
       const query = rawQuery.trim().toLowerCase();
       if (!query) return [];
       const results: SearchResult[] = [];
 
-      for (const org of snapshot.organisations) {
+      for (const org of publicSnapshot.organisations) {
         const hit =
           org.name.toLowerCase().includes(query) ||
           org.handle.toLowerCase().includes(query) ||
@@ -110,7 +143,7 @@ function buildRegistry(snapshot: RegistrySnapshot, refresh: () => void): Registr
         }
       }
 
-      for (const person of snapshot.people) {
+      for (const person of publicSnapshot.people) {
         const hit =
           person.name.toLowerCase().includes(query) ||
           person.handle.toLowerCase().includes(query) ||
@@ -125,7 +158,7 @@ function buildRegistry(snapshot: RegistrySnapshot, refresh: () => void): Registr
         }
       }
 
-      for (const claim of snapshot.claims) {
+      for (const claim of publicSnapshot.claims) {
         if (claim.id !== query) continue;
         const org = orgById.get(claim.organisationId);
         const subjectId = claim.kind === "relationship" ? claim.personId : claim.representativeId;
@@ -165,6 +198,27 @@ export function RegistryProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [attempt]);
+
+  useEffect(() => {
+    // A public trust verdict must not stay frozen for the lifetime of a tab.
+    // This is intentionally conservative for the small direct-RPC MVP; the
+    // production indexer can replace it with cheap targeted/event-driven reads.
+    const timer = window.setInterval(refresh, 60_000);
+    const onVisibility = () => {
+      if (
+        document.visibilityState === "visible" &&
+        snapshot &&
+        Date.now() - snapshot.loadedAt > 30_000
+      ) {
+        refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refresh, snapshot]);
 
   const registry = useMemo(
     () => (snapshot ? buildRegistry(snapshot, refresh) : null),

@@ -31,11 +31,12 @@ jobs:
           workspaces: SC
 
       - run: cargo fmt --all --check
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test
 
-      # The contract has to fit the network's size limit, so build the artefact
-      # CI would actually deploy rather than only the host-target one.
+      # Compile the deployable Wasm target and enforce the network ceiling.
+      # Release operations additionally use `stellar contract build --optimize`
+      # and record the optimized candidate's hash.
       - name: Build Wasm
         run: cargo build --target wasm32v1-none --release
 
@@ -66,6 +67,7 @@ jobs:
           cache-dependency-path: FE/package-lock.json
 
       - run: npm ci
-      - run: npx oxlint
+      - run: npm run lint
+      - run: npm test
       # `npm run build` runs `tsc -b` first, so this covers type checking too.
       - run: npm run build
