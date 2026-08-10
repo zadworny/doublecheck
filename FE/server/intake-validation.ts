@@ -1,4 +1,3 @@
-import { StrKey } from "@stellar/stellar-sdk";
 import { isIP } from "node:net";
 
 /**
@@ -354,11 +353,45 @@ function readController(input: unknown, errors: Record<string, string>): string 
   const value = readText(input, "controllerAddress", errors, { min: 56, max: 56, required: false });
   if (!value) return undefined;
   const upper = value.toUpperCase();
-  if (!StrKey.isValidEd25519PublicKey(upper) && !StrKey.isValidContract(upper)) {
+  if (!isValidStellarController(upper)) {
     errors.controllerAddress = "Enter a valid Stellar G… account or C… contract address.";
     return undefined;
   }
   return upper;
+}
+
+/** Validate G… account and C… contract StrKeys without loading the browser SDK
+ * in the serverless intake function. StrKeys are base32(version + 32 bytes +
+ * little-endian CRC16-XModem checksum). */
+function isValidStellarController(value: string): boolean {
+  if (!/^[A-Z2-7]{56}$/.test(value)) return false;
+
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let accumulator = 0;
+  const decoded: number[] = [];
+  for (const character of value) {
+    const digit = alphabet.indexOf(character);
+    if (digit < 0) return false;
+    accumulator = (accumulator << 5) | digit;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      decoded.push((accumulator >>> bits) & 0xff);
+      accumulator &= (1 << bits) - 1;
+    }
+  }
+  if (decoded.length !== 35 || bits !== 0) return false;
+  if (decoded[0] !== 6 << 3 && decoded[0] !== 2 << 3) return false;
+
+  let checksum = 0;
+  for (let index = 0; index < 33; index += 1) {
+    checksum ^= decoded[index] << 8;
+    for (let bit = 0; bit < 8; bit += 1) {
+      checksum = checksum & 0x8000 ? ((checksum << 1) ^ 0x1021) & 0xffff : (checksum << 1) & 0xffff;
+    }
+  }
+  return decoded[33] === (checksum & 0xff) && decoded[34] === (checksum >>> 8);
 }
 
 function readOptionalEnum<const T extends readonly string[]>(
