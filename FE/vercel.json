@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/intake.ts": {
+      "runtime": "nodejs24.x",
+      "includeFiles": "server/intake-validation.ts"
+    }
+  },
   "rewrites": [{ "source": "/:path*", "destination": "/index.html" }],
   "headers": [
     {
