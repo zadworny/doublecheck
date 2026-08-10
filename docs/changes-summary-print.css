@@ -1,0 +1,215 @@
+@page {
+  size: A4;
+  margin: 15mm 15mm 17mm;
+
+  @bottom-left {
+    content: "DOUBLECHECK  •  VNEXT IMPLEMENTATION SUMMARY";
+    color: #64748b;
+    font: 700 7.5px/1.2 Inter, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0.09em;
+  }
+
+  @bottom-right {
+    content: "PAGE " counter(page) " / " counter(pages);
+    color: #64748b;
+    font: 700 7.5px/1.2 Inter, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0.09em;
+  }
+}
+
+@page :first {
+  margin: 0;
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+html {
+  background: #e8eef4;
+  color: #14213d;
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  font-size: 10.25pt;
+  line-height: 1.4;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+body { margin: 0; background: #fff; }
+
+.cover {
+  position: relative;
+  display: flex;
+  min-height: 297mm;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 28mm 23mm 22mm;
+  background:
+    radial-gradient(circle at 88% 13%, rgba(34, 211, 238, 0.45) 0 7%, transparent 7.4%),
+    radial-gradient(circle at 90% 16%, transparent 0 16%, rgba(103, 232, 249, 0.17) 16.3% 17%, transparent 17.4%),
+    linear-gradient(140deg, #061426 0%, #0b3151 57%, #087ebf 100%);
+  color: white;
+  break-after: page;
+}
+
+.cover::after {
+  position: absolute;
+  right: -42mm;
+  bottom: -33mm;
+  width: 125mm;
+  height: 125mm;
+  border: 2px solid rgba(255,255,255,.17);
+  border-radius: 50%;
+  content: "";
+}
+
+.eyebrow {
+  color: #67e8f9;
+  font-size: 9.5pt;
+  font-weight: 800;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+}
+
+.cover h1 {
+  max-width: 150mm;
+  margin: 34mm 0 5mm;
+  font-size: 43pt;
+  font-weight: 800;
+  letter-spacing: -.045em;
+  line-height: .98;
+}
+
+.cover h2 {
+  max-width: 138mm;
+  margin: 0;
+  color: #bae6fd;
+  font-size: 18pt;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.cover-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+  position: relative;
+  z-index: 1;
+}
+
+.cover-stat {
+  padding: 6mm;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 4mm;
+  background: rgba(255,255,255,.09);
+  backdrop-filter: blur(8px);
+}
+
+.cover-stat strong { display: block; font-size: 23pt; line-height: 1; }
+.cover-stat span { display: block; margin-top: 2mm; color: #bae6fd; font-size: 8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+.cover-foot { position: relative; z-index: 1; color: #bae6fd; font-size: 9pt; }
+
+.content { padding-top: 1mm; }
+
+.intro {
+  margin: 0 0 8mm;
+  padding: 5mm 6mm;
+  border: 1px solid #bae6fd;
+  border-radius: 4mm;
+  background: linear-gradient(100deg, #effaff, #f8fcfe);
+  color: #31516a;
+}
+
+.category { margin-bottom: 8mm; break-inside: avoid-page; }
+.category:last-of-type { break-inside: auto; }
+
+.category h2 {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  margin: 0 0 4mm;
+  padding: 4mm 5mm;
+  border-radius: 4mm;
+  color: white;
+  font-size: 18pt;
+  line-height: 1;
+}
+
+.category h2::before {
+  display: inline-grid;
+  width: 8mm;
+  height: 8mm;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.45);
+  border-radius: 50%;
+  font-size: 11pt;
+  content: "+";
+}
+
+.category.new h2 { background: linear-gradient(105deg, #087ebf, #15b8d6); }
+.category.improved h2 { background: linear-gradient(105deg, #0f766e, #18a784); }
+.category.improved h2::before { content: "↗"; }
+.category.fixed { break-before: page; }
+.category.fixed h2 { background: linear-gradient(105deg, #7040a0, #9c5dc3); }
+.category.fixed h2::before { content: "✓"; }
+
+ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.2mm 4mm;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  position: relative;
+  min-height: 10mm;
+  padding: 2.6mm 3mm 2.6mm 8mm;
+  border: 1px solid #dbe5ed;
+  border-radius: 2.8mm;
+  background: #fff;
+  color: #263b52;
+  font-size: 8.8pt;
+  line-height: 1.28;
+  break-inside: avoid;
+}
+
+li::before {
+  position: absolute;
+  left: 3mm;
+  top: 3.1mm;
+  width: 2.2mm;
+  height: 2.2mm;
+  border-radius: 50%;
+  background: #15b8d6;
+  content: "";
+}
+
+.improved li::before { background: #18a784; }
+.fixed li::before { background: #9c5dc3; }
+
+code {
+  padding: .3mm 1mm;
+  border-radius: 1mm;
+  background: #eef3f7;
+  color: #075d84;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 8pt;
+}
+
+.deployment {
+  margin-top: 7mm;
+  padding: 5mm 6mm;
+  border-left: 4px solid #15b8d6;
+  border-radius: 0 3mm 3mm 0;
+  background: #eef9fc;
+  color: #29465c;
+  font-size: 9pt;
+}
+
+@media print {
+  html, body { background: white; }
+}

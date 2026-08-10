@@ -22,6 +22,7 @@ making a claim about production readiness.
 | Vulnerability scope/private reporting | [Security policy](../SECURITY.md) |
 | Evidence of shipped milestones | [Traction](traction.md) |
 | Full vNext implementation/audit/deployment report | [Markdown](IMPLEMENTATION_REPORT_2026-08-10.md) · [PDF](IMPLEMENTATION_REPORT_2026-08-10.pdf) |
+| Visual summary of new features, improvements, and fixes | [Markdown](IMPLEMENTED_CHANGES_SUMMARY_2026-08-10.md) · [PDF](IMPLEMENTED_CHANGES_SUMMARY_2026-08-10.pdf) |
 
 ## Sources of truth
 

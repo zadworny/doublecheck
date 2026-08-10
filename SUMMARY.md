@@ -9,6 +9,8 @@
 * [Roadmap](docs/roadmap.md)
 * [Implementation report](docs/IMPLEMENTATION_REPORT_2026-08-10.md)
 * [Implementation report PDF](docs/IMPLEMENTATION_REPORT_2026-08-10.pdf)
+* [Implemented changes summary](docs/IMPLEMENTED_CHANGES_SUMMARY_2026-08-10.md)
+* [Implemented changes summary PDF](docs/IMPLEMENTED_CHANGES_SUMMARY_2026-08-10.pdf)
 
 ## Technical
 
