@@ -481,6 +481,30 @@ Post-upgrade smoke verification confirmed:
 - empty pending lookup returns `null` rather than failing;
 - full keeper batch committed successfully.
 
+### GitHub, web deployment, and production smoke evidence
+
+| Item | Result |
+|---|---|
+| GitHub branch | `main` |
+| Main implementation commit | `e8c54a3acb7c598da7d70c2365f579aaa41f1953` |
+| Final runtime/config commit before this report refresh | `cc4a986719eb01415ca1356e86252865daba957f` |
+| GitHub CI | Passed — run `31429171093` |
+| Vercel production URL | `https://doublecheck-lime.vercel.app` |
+| Vercel deployment | Passed for `cc4a986` |
+| Public routes | `/`, `/apply`, `/verify`, `/standard`, `/manage`, and `/badge/acme-robotics` returned HTTP 200 |
+| Browser render smoke | Application, standard, Acme entity, and live-badge content rendered in headless Chrome |
+| Intake API | `GET /api/intake` returned honest JSON 405; invalid JSON-shaped POST returned validated JSON 422 |
+| Badge framing policy | `no-store`, `frame-ancestors *`, no `X-Frame-Options` |
+| Normal route framing policy | `SAMEORIGIN` and `frame-ancestors 'self'` |
+
+Production smoke testing exposed and corrected a serverless-only failure that local TypeScript and
+Node tests could not reproduce. Vercel's per-function compiler initially lacked the Node/TypeScript
+settings used by the repository, and the shared validator was not explicitly packaged. The release
+now includes a function-local TypeScript configuration, explicit dependency packaging, a compiler-
+portable discriminated-union guard, and a lightweight server-side Stellar StrKey checksum validator.
+This removed the runtime SDK load from intake validation. The repaired endpoint was redeployed and
+verified from the public production URL.
+
 ## 9. Files and subsystems materially changed
 
 ### Contract
