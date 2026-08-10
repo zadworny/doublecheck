@@ -1,6 +1,7 @@
-# Table of contents
+# Documentation
 
-* [Introduction](README.md)
+* [Project introduction](README.md)
+* [Documentation index](docs/README.md)
 
 ## Product
 
@@ -12,6 +13,8 @@
 * [Architecture](docs/architecture.md)
 * [Smart contract](SC/README.md)
 * [Explorer](FE/README.md)
+* [Development](docs/DEVELOPMENT.md)
+* [Repository guide](docs/REPOSITORY.md)
 * [Deployment](docs/deployment.md)
 
 ## Policy

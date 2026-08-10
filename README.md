@@ -15,7 +15,7 @@ the reader's side.
 |---|---|
 | [`SC/`](SC/) | Soroban smart contract (Rust) — the registry itself |
 | [`FE/`](FE/) | React + Vite explorer — the public verifier |
-| [`docs/`](docs/) | architecture and deployment |
+| [`docs/`](docs/) | project, technical, operational, and product documentation |
 
 ## How it works
 
@@ -59,6 +59,8 @@ encoding a result that could go stale.
 
 ## Start here
 
+- **[`docs/README.md`](docs/README.md)** — the documentation index: choose the right guide, find
+  the source of truth for a topic, and see how the documentation is maintained.
 - **[`docs/architecture.md`](docs/architecture.md)** — the data model, the trust model, where the
   on-chain boundary falls, and how personal data is handled.
 - **[`SC/README.md`](SC/README.md)** — contract interface reference, build, test, deploy, and a CLI
@@ -66,6 +68,10 @@ encoding a result that could go stale.
 - **[`FE/README.md`](FE/README.md)** — running the explorer, how records travel from chain to screen,
   and regenerating the contract bindings.
 - **[`docs/deployment.md`](docs/deployment.md)** — hosting, operations, and the deferred indexer.
+- **[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)** — contributor setup, checks, and the safe
+  contract-to-explorer change workflow.
+- **[`docs/REPOSITORY.md`](docs/REPOSITORY.md)** — repository layout, ownership boundaries,
+  generated files, and documentation conventions.
 - **[`docs/roadmap.md`](docs/roadmap.md)** — what is left to do, what blocks mainnet, and what is
   deliberately out of scope.
 - **[`SECURITY.md`](SECURITY.md)** — reporting process, and what is in and out of scope.
