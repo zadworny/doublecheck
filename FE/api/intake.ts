@@ -45,7 +45,9 @@ export default async function handler(req: VercelRequest, res: ServerResponse) {
   }
 
   const validation = validateIntake(input);
-  if (!validation.ok) {
+  // The `in` guard also narrows correctly under Vercel's looser per-function
+  // TypeScript compiler settings.
+  if ("errors" in validation) {
     return send(res, 422, {
       ok: false,
       error: validation.errors.body ?? "Please correct the highlighted information.",
