@@ -55,6 +55,35 @@ body {
   animation: fade-in 0.45s ease-out both;
 }
 
+/* Route entry: reveal each page's top-level sections in a short cascade. */
+.animate-page-sections > * > * {
+  animation: rise-in 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-page-sections > * > :nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.animate-page-sections > * > :nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.animate-page-sections > * > :nth-child(4) {
+  animation-delay: 210ms;
+}
+
+.animate-page-sections > * > :nth-child(5) {
+  animation-delay: 280ms;
+}
+
+.animate-page-sections > * > :nth-child(6) {
+  animation-delay: 350ms;
+}
+
+.animate-page-sections > * > :nth-child(n + 7) {
+  animation-delay: 420ms;
+}
+
 /* Draws the eye to the search field once it has arrived. */
 @keyframes search-glow {
   0%,
@@ -74,6 +103,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-rise-in,
   .animate-fade-in,
+  .animate-page-sections > * > *,
   .animate-search-glow {
     animation: none;
   }

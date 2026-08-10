@@ -1,10 +1,13 @@
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { Navbar } from "./Navbar";
 import { chainConfig } from "../lib/chain";
 
 const IS_TESTNET = chainConfig.networkPassphrase.includes("Test SDF");
 
 export function Layout() {
+  const location = useLocation();
+  const animatePage = location.pathname !== "/";
+
   return (
     <div className="flex min-h-full flex-col">
       <Navbar />
@@ -15,7 +18,9 @@ export function Layout() {
         </div>
       )}
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        <Outlet />
+        <div key={location.pathname} className={animatePage ? "animate-page-sections" : undefined}>
+          <Outlet />
+        </div>
       </main>
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
         DoubleCheck — read live from{" "}
