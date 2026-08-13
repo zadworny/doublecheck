@@ -12,6 +12,7 @@ making a claim about production readiness.
 
 | Need | Document |
 |---|---|
+| Stellar/Soroban integration reference: registries, TTL, events, indexer, passkeys, wallets, governance, credentials | [Stellar technical architecture](stellar-architecture.md) |
 | Product, trust, consent, privacy, and Stellar design | [Architecture](architecture.md) |
 | Contract interface, tests, keepalive, deploy/upgrade | [Smart-contract README](../SC/README.md) |
 | Browser verifier, wallet writes, intake API, bindings | [Frontend README](../FE/README.md) |

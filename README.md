@@ -78,6 +78,9 @@ specification. This is still testnet, not an audited production release.
 ## Documentation
 
 - [`docs/README.md`](docs/README.md) — documentation index and sources of truth
+- [`docs/stellar-architecture.md`](docs/stellar-architecture.md) — Stellar/Soroban technical architecture: the four
+  registries, storage and TTL, event schema and indexer, passkey smart accounts, wallets, sponsored
+  transactions, SEP-10/SEP-45, governance, and the off-chain credential layer
 - [`docs/architecture.md`](docs/architecture.md) — data, trust, privacy, and Stellar design
 - [`SC/README.md`](SC/README.md) — contract interface and release workflow
 - [`FE/README.md`](FE/README.md) — frontend, verifier, intake API, and bindings

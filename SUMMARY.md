@@ -12,6 +12,7 @@
 
 ## Technical
 
+* [Stellar technical architecture](docs/stellar-architecture.md)
 * [Architecture](docs/architecture.md)
 * [Smart contract](SC/README.md)
 * [Explorer](FE/README.md)
