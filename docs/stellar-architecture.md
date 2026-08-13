@@ -1,8 +1,16 @@
 # Technical architecture — Stellar integration
 
+**Project:** DoubleCheck — open trust infrastructure for company-signed relationships and
+representation mandates.
+**Steward and first verification issuer:** Jobited (Berlin, Germany).
+**Model:** token-free, open source, multi-issuer by design, EU/GDPR-first.
+**Target network:** Stellar Testnet (live) → Stellar Mainnet.
+
 DoubleCheck is a public, wallet-free trust registry on Soroban. It answers three questions from one
 link: **is this counterparty verified, is the stated affiliation supported, and is there a confirmed
-mandate that is valid right now?**
+mandate that is valid right now?** A candidate or customer gets that answer in seconds with no
+wallet, no XLM and no blockchain knowledge; companies act through passkey-backed Soroban smart
+accounts with role separation and multisig on sensitive actions.
 
 This document is the Stellar-specific engineering reference. It is written so a reviewer can decide
 whether this team can start building immediately: every claim below is either **live on public
@@ -40,7 +48,7 @@ Companion documents: [current-state architecture](architecture.md) · [contract 
 
 A database can render the same page. It cannot survive its own operator. The registry exists so that
 a reader can establish, **without trusting doublecheck.com**, which key authenticated a statement and
-what its status is right now. Three Stellar properties make that practical rather than theoretical:
+what its status is right now. Five Stellar properties make that practical rather than theoretical:
 
 1. **Free, wallet-free reads.** Soroban RPC `simulateTransaction` executes a contract read without a
    transaction, a fee, an account, or a signature. A candidate verifying a recruiter installs
@@ -55,6 +63,20 @@ what its status is right now. Three Stellar properties make that practical rathe
    lets the contract stamp *who actually signed* a claim — the difference between "the company
    confirmed this" and "the recruiter says so" — and it is what makes a sponsored/relayed
    transaction safe (§6.4).
+4. **Authentication delegation (Protocol 27 "Zipper", CAP-0071-01).** `delegate_account_auth` and the
+   `SOROBAN_CREDENTIALS_ADDRESS_WITH_DELEGATES` credential bundle a tree of delegated signers into a
+   **single** authorization entry. A company approval requiring two of three admins is therefore one
+   transaction with one nonce and one simulation, rather than one authorization entry per signer.
+   Multi-party corporate signing is a protocol feature here, not an application-layer workaround.
+5. **Predictable, tiny fees for status writes.** Soroban's resource-based fee model prices an
+   attestation as what it is — a handful of small ledger entries. A trust registry writes constantly
+   (issue, confirm, suspend, expire, withdraw) and could not exist on a chain where each of those is
+   priced like a token transfer.
+
+**Signature-payload forward compatibility.** New work builds against
+`SOROBAN_CREDENTIALS_ADDRESS_V2` (CAP-0071-02), whose payload is address-bound, rather than the
+legacy V1 credential that is replaced at Protocol 28. This closes a cross-account signature-replay
+class by construction and avoids a forced migration later.
 
 What Stellar does not give us, and what this design therefore has to supply itself:
 
@@ -454,13 +476,39 @@ pub struct KeepaliveResult {
 ```
 
 Operations run it from a dedicated funded source on a monitored schedule until `done`, with alerting
-on the source balance. Archived entries need a separate `RestoreFootprint` operation before the next
-read succeeds; the verifier needs a "restoring…" path rather than a false negative.
+on the source balance.
 
-**BUILD — TTL service.** A small scheduled worker that (a) drives `keepalive` to completion on a
-cadence derived from `EXTEND_THRESHOLD`, (b) monitors per-entry TTL through RPC `getLedgerEntries`
-and prioritises entries nearest archival, (c) auto-submits `RestoreFootprint` for archived entries a
-reader requested, and (d) exports rent spend and TTL headroom as metrics. Budgeted in §13.
+### 5.4 What archival actually costs — and the asymmetry nobody documents
+
+Since **Protocol 23 (CAP-0066)**, archived persistent and instance entries are restored
+**automatically** before a host function runs, provided they appear in the transaction's restore
+list — and simulation through Stellar RPC populates that list for you. For anything that submits a
+transaction, an archived DoubleCheck record is therefore a **fee event, not an outage**. Restored
+entries are priced as disk data (rent, read and write fees still apply), and `RestoreFootprintOp`
+remains available for bulk restoration or where we would rather absorb the cost than pass it to a
+user.
+
+**But that relief does not reach the read path, and this is the asymmetry that matters here.** The
+public verifier does read-only simulation: it never submits, so it can never carry a restore list. An
+archived entry is a genuine outage for exactly the traffic this product exists to serve — a candidate
+checking a recruiter, with no wallet and nothing to sign.
+
+Three consequences:
+
+1. The keeper stays essential. Auto-restore reduces archival to an accounting problem for writers; it
+   does nothing for readers.
+2. The verifier must distinguish "archived, restorable" from "no such record" and render a
+   *restoring* state, never a false negative. Showing "not verified" for an archived badge would be
+   the single worst failure this system can produce.
+3. Operations can restore on the reader's behalf: the verifier reports the archived key, the TTL
+   service submits the restore, and the page resolves. The reader still signs nothing.
+
+**BUILD — TTL service.** A scheduled worker that (a) drives `keepalive` to completion on a cadence
+derived from `EXTEND_THRESHOLD`, (b) monitors per-entry TTL through RPC `getLedgerEntries`,
+prioritising contract instance/code entries and active records, (c) submits restores for archived
+entries a reader requested, and (d) exports rent spend, TTL headroom and **the minimum TTL across the
+whole estate** as a monitored metric — one number that tells operations whether the registry is
+healthy. Budgeted in §13.
 
 ---
 
@@ -525,30 +573,47 @@ flowchart LR
     REC -->|divergence| ALERT[Alert + auto-replay]
 ```
 
-**Ingestion.** A single-writer worker polls `getEvents` with a persisted `(ledger, cursor)` pair and
-a topic filter scoped to the contract id. Two hard constraints shape it: an RPC node retains events
-only for a bounded window (a configured ledger-retention setting, on the order of days), and cursors
-are per-endpoint. So the ingestor must never fall further behind than that window, and a cold start
-must be able to rebuild from contract reads rather than from history alone. Both are addressed by
-keeping the projection
-**derivable from contract state** (below) rather than only from the event stream.
+**Two ingestion paths, because RPC is not an archive.** An RPC node retains events only for a bounded
+window (a configured ledger-retention setting, on the order of days) and cursors are per-endpoint.
+Treating RPC as the historical source is the standard way these systems lose data, so there are two
+paths from day one:
+
+1. **Live path.** A single-writer worker polls `getEvents` from a persisted `(ledger, cursor)` pair,
+   filtered to the contract id, and must never fall further behind than the retention window.
+2. **Backfill / disaster path.** Replay raw ledger metadata from a
+   [Galexie](https://developers.stellar.org/docs/data/indexers/build-your-own/galexie/admin_guide/full-history-exporting)
+   data lake (S3/GCS) using the
+   [ingest SDK](https://developers.stellar.org/docs/data/indexers/build-your-own/ingest-sdk). This
+   makes the projections rebuildable from contract genesis with **no RPC history at all** — the
+   answer to a corrupted database, a schema migration, or an ingestor that was down longer than the
+   retention window.
+
+**Idempotency.** The primary key of every ingested row is `(ledger_seq, tx_index, event_index)`, so
+re-ingestion — after a crash, a replay, or an overlapping backfill — is a no-op rather than a
+duplicate. This is what makes path 2 safe to run against a live path 1.
 
 **Storage.** Two layers: an append-only `events` table (ledger, tx hash, event index, topics, body
 JSON) which is the audit log and replay source, and derived projections (`entities`,
 `relationships`, `mandates`, `status_history`) rebuilt by replaying `events` from zero. Every
-projection row carries `last_ledger` so staleness is visible in the API response rather than hidden.
+projection row carries `last_event_ledger` so staleness is visible in the API response rather than
+hidden.
 
 **Finality.** Stellar has deterministic single-slot finality via SCP — there are no reorgs to unwind.
 The ingestor still records `ledger_sequence` per event and only serves data at or below the latest
 ledger it has fully ingested, so a partially processed ledger is never half-visible.
 
 **Reconciliation — why the indexer can never lie.** On a schedule, the reconciler picks a rolling
-sample plus every entity touched in the last window, calls the contract's own `check(handle)`,
-`get_entity`, `get_mandate` and `is_authorised`, and diffs against the projection. Divergence raises
-an alert, marks the affected rows stale, and triggers a targeted replay. The API surfaces
-`source: "indexed" | "chain"` and the verdict path for `is_authorised` **always** re-reads the
-contract directly. The indexer accelerates browsing; it never gets to decide whether someone is
-authorised.
+sample plus every entity touched in the last window, re-reads authoritative state through
+`getLedgerEntries` and the contract's own `check(handle)`, `get_entity`, `get_mandate` and
+`is_authorised`, and diffs against the projection. Divergence raises a drift alert, marks the
+affected public record **stale rather than serving a value the chain does not support**, and triggers
+a targeted replay. The API surfaces `source: "indexed" | "chain"` and the verdict path for
+`is_authorised` **always** re-reads the contract directly. The indexer accelerates browsing; it never
+gets to decide whether someone is authorised.
+
+**The alarm is tested, not assumed.** A deliberate-drift test — mutate a projection row by hand,
+assert the reconciler alerts and marks it stale within one cycle — is an acceptance criterion of the
+indexer milestone. An unverified monitoring path is indistinguishable from no monitoring.
 
 **Why this design and not a subgraph.** There is no hosted indexing service on Stellar to depend on,
 and depending on one would reintroduce exactly the "trust the operator" problem the chain is here to
@@ -574,6 +639,27 @@ client ??= new Client({
 `/verify`, `/badge/<handle>`, handle pages, search and the credential panel run entirely on
 simulation. Zero fee, zero signature, zero install. This is non-negotiable product design: the badge
 is worthless if a candidate has to acquire a wallet to check a recruiter.
+
+**What the page must say, not just compute.** The verifier renders current relationships, historical
+relationships, active and expired mandates, the issuer, the attesting key, validity dates and the
+last confirmation. The hardest part is not the query — it is the wording of the case that misleads
+people most often, which the UI states explicitly rather than leaving to inference:
+
+> **Past employee.** This organisation confirms employment during the displayed period. This does
+> **not** provide current authority to represent the organisation.
+
+A stale affiliation presented as current authority is the most common real-world scam pattern in this
+domain, and it is a copy problem as much as a contract problem.
+
+**The badge is dynamic, which is what makes it uncopyable.** `/badge/<handle>` re-reads live state and
+turns non-green the moment a relationship ends, a mandate expires, authority is withdrawn, a
+credential is suspended, or the issuing organisation goes inactive. Responses are `no-store`. A
+screenshot cannot fake this, because the colour is a function of a live response, and that response
+is a function of contract state — which is precisely why the system ships **no** frozen "verified"
+artefacts anywhere, including QR codes and share links.
+
+**Performance targets:** verifier p95 under two seconds at pilot load; a status change visible within
+about a minute of the confirming transaction; 30-second edge cache TTL on public reads.
 
 ### 7.2 Stellar Wallets Kit in the operator console · BUILD
 
@@ -681,6 +767,25 @@ a specific contract, function set and validity window. Applied here:
 A stolen session key can therefore never revoke a badge or accept a controller rotation. This is the
 kind of blast-radius control a trust registry should have and a plain EOA cannot express.
 
+**Organisation accounts get a policy matrix, not one key.** An individual's wallet is a passkey and a
+recovery signer. A company account additionally carries policies from OpenZeppelin's
+[`stellar-accounts`](https://crates.io/crates/stellar-accounts) smart-account framework, which
+separates *who may sign* (signers), *what they may do* (context rules) and *how it is enforced*
+(policies). Applied to the registry's action classes:
+
+| Action class | Policy |
+|---|---|
+| read-only console views | no signature |
+| propose a relationship, draft a mandate | 1 admin passkey |
+| activate/end a relationship, activate/withdraw a mandate | 1 admin passkey — alerted and audit-logged |
+| add or remove an admin, rotate the organisation key, change the organisation's registry controller | **2-of-3 multisig policy** |
+
+The bottom row is the one that stops a single compromised laptop from handing a company's
+representation authority to an attacker. Under Protocol 27 those two-of-three signatures bundle
+through `delegate_account_auth` into one `SOROBAN_CREDENTIALS_ADDRESS_WITH_DELEGATES` entry: one
+transaction, one nonce, one simulation. Before Zipper this pattern cost an authorization entry per
+signer and was the reason most projects quietly settled for a single admin key.
+
 ### 7.4 Sponsored transactions · BUILD
 
 Three distinct mechanisms, used for three distinct problems. They are often conflated; they are not
@@ -688,15 +793,18 @@ interchangeable.
 
 | Mechanism | Solves | Where used |
 |---|---|---|
-| **Relayed submission** (Launchtube or self-hosted) | contract-account user has no XLM and no sequence number | passkey holder writes |
+| **Relayed submission** ([Launchtube](https://github.com/stellar/launchtube) or [OpenZeppelin Relayer](https://github.com/OpenZeppelin/openzeppelin-relayer)) | contract-account user has no XLM and no sequence number | passkey holder writes |
 | **Fee-bump transaction** (CAP-15) | classic `G…` user has an account but no XLM for fees | expert/legacy holder writes |
 | **Sponsored reserves** (CAP-33, `begin/endSponsoringFutureReserves`) | classic account creation and its base reserve | only where a `G…` account must exist at all |
 
-Default path: [Launchtube](https://github.com/stellar/launchtube), the SDF-operated service that
-accepts a signed Soroban transaction or auth entry and handles fee and sequence. Fallback and
-mainnet-grade path: a self-hosted relayer — a small service holding a funded submitter account,
-rate-limited per subject, with a per-day XLM cap and metrics. Launchtube-compatible interface so the
-two are swappable.
+**No end user ever needs XLM.** The platform's transaction service builds the invocation, simulates
+it through RPC (which also populates any restore list, §5.4), then submits it with a platform fee
+source. Default path: [Launchtube](https://github.com/stellar/launchtube), the SDF-operated service
+that accepts a signed Soroban transaction or auth entry and handles fee and sequence. Fallback and
+mainnet-grade path: a self-hosted [OpenZeppelin Relayer](https://github.com/OpenZeppelin/openzeppelin-relayer)
+holding a funded submitter account. Both sit behind one interface so they are swappable, and
+[`stellar-fee-abstraction`](https://crates.io/crates/stellar-fee-abstraction) is the contract-side
+option if fee payment ever needs to be expressed on-chain rather than in the relayer.
 
 **The invariant that makes this safe, and how it is enforced.** Soroban authorization is a signature
 over a `SorobanAuthorizationEntry`: the authorising address, a nonce, a signature-expiration ledger,
@@ -712,9 +820,11 @@ clean answer — the console always offers "sign and submit yourself" as a fallb
 pay their own fee. Neither is an integrity problem. That distinction is why fee sponsorship is
 acceptable in a system whose entire value is that nobody can rewrite a trust decision.
 
-Additional controls: per-subject rate limits, an allowlist restricted to the registry contract id and
-the holder-callable function set, refusal of any invocation tree touching admin functions, and a
-funded-balance alert.
+Additional controls: rate limits **per organisation and per subject**, an allowlist restricted to the
+registry contract id and the holder-callable function set, refusal of any invocation tree touching
+admin functions, and a funded-balance alert. Every sponsored invocation is written to the audit log
+**with its resource fee**, so sponsor abuse is a visible, bounded and costed line item rather than a
+surprise at the end of the month.
 
 ### 7.5 SEP-10 and SEP-45 session authentication · BUILD
 
@@ -749,33 +859,47 @@ custody** and **a delay before the code can change**.
 
 ### 8.1 OpenZeppelin `stellar-contracts`
 
-[OpenZeppelin's Stellar library](https://github.com/OpenZeppelin/stellar-contracts) (audited,
-published on crates.io — `stellar-access` 0.7.2 as of June 2026) replaces our own access plumbing:
+[OpenZeppelin's Stellar library](https://github.com/OpenZeppelin/stellar-contracts) is audited and
+published on crates.io. Using it rather than hand-rolled admin logic removes both a maintenance
+burden and an audit surface:
 
 ```toml
 [dependencies]
-soroban-sdk           = "27.0.5"
-stellar-access        = "0.7"   # AccessControl, Ownable, role transfer
-stellar-contract-utils = "0.7"  # pausable, upgradeable, crypto utilities
-stellar-macros        = "0.7"   # #[only_role], #[when_not_paused], #[only_owner]
+soroban-sdk            = "27.0.5"
+stellar-access         = "0.7"   # AccessControl, Ownable, role transfer
+stellar-contract-utils = "0.7"   # pausable, upgradeable, cryptography
+stellar-governance     = "0.7"   # governor, votes, timelock
+stellar-accounts       = "0.7"   # smart accounts: signers, context rules, policies, verifiers
+stellar-macros         = "0.7"   # #[only_role], #[when_not_paused], #[only_owner]
 ```
 
 | Concern | Today | After |
 |---|---|---|
 | roles | `DataKey::Admin` / `DataKey::Arbiter` + manual checks in each function | `stellar-access::access_control` with named roles and an admin role per role |
 | pause | `DataKey::Paused` + manual `if paused` | `stellar-contract-utils::pausable` + `#[when_not_paused]` on write paths only |
-| upgrade | `upgrade(hash)`, immediate | `#[derive(Upgradeable)]` + `UpgradeableInternal::_require_auth` + our timelock (§8.3) |
+| upgrade | `upgrade(hash)`, immediate | `#[derive(Upgradeable)]` + `UpgradeableInternal::_require_auth`, gated by `stellar-governance` timelock (§8.3) |
 | ownership transfer | bespoke two-step | `role_transfer` two-step, same guarantee, audited implementation |
+| company account policies | none | `stellar-accounts` context rules and policies (§7.3) |
 
-Roles after migration: `ISSUER`, `ARBITER`, `REVIEWER`, `PAUSER`, `UPGRADER`, `KEEPER`. This is a
-strict improvement over one all-powerful admin — the key that proposes badges every day is not the
-key that can upgrade the Wasm.
+**Two role planes, deliberately separate.** Collapsing them is the mistake that lets an issuer attest
+on a company's behalf:
+
+| Plane | Roles | Governs |
+|---|---|---|
+| protocol | `ISSUER_ADMIN`, `ARBITER`, `REVIEWER`, `PAUSER`, `UPGRADER`, `GOVERNOR`, `KEEPER` | who may act on the registry itself |
+| organisation, scoped per entity | `ORG_OWNER`, `RELATIONSHIP_ADMIN`, `MANDATE_ADMIN`, `SECURITY_ADMIN`, `VIEWER` | who may act *for one specific organisation* |
+
+The issuer can suspend an organisation. The issuer **cannot** sign a relationship for it. That
+separation is the whole reason an `IssuerConfirmed` claim is labelled differently from a
+`CounterpartyConfirmed` one (§4), and the role model has to encode it rather than rely on operator
+discipline.
 
 **The nuance that survives the migration, and must:** the per-badge `Entity::issuer` stays a **record
 field**, not a global role. Global RBAC governs *who may act now*; the stored issuer governs *who
-vetted this specific badge*. Granting someone the `ISSUER` role tomorrow must not give them authority
+vetted this specific badge*. Granting someone `ISSUER_ADMIN` tomorrow must not give them authority
 over a badge issued last year. Any migration that collapses these two concepts breaks the central
-security property of §3.2, and the test suite asserts it (`stored_issuer_signs_renewal_and_recovery_after_admin_handover`).
+security property of §3.2, and the test suite asserts it
+(`stored_issuer_signs_renewal_and_recovery_after_admin_handover`).
 
 Sizing: 60,131 of 131,072 bytes used today. The library adds roughly 8–15 KB; the budget absorbs it.
 
@@ -794,16 +918,19 @@ stellar tx new set-options --source dc-admin --signer <SIGNER_2> --signer-weight
 stellar tx new set-options --source dc-admin --signer <SIGNER_3> --signer-weight 1
 ```
 
-Separation of duties across distinct keys, with independent custody: `UPGRADER` (2-of-3),
-`ISSUER` (day-to-day, hardware wallet), `ARBITER` (separate holder — an arbiter must not be able to
-revoke), deployer, webhook, and the funded keeper. Signing ceremony: build XDR → circulate → each
-signer verifies the decoded invocation independently (never the summary) → combine → submit.
+Separation of duties across distinct keys, with independent custody: `GOVERNOR` and `UPGRADER`
+(2-of-3), `ISSUER_ADMIN` (day-to-day, hardware wallet), `ARBITER` (separate holder — an arbiter must
+not be able to revoke), deployer, webhook, and the funded keeper. Issuer signing keys are KMS/HSM
+backed. Signing ceremony: build XDR → circulate → each signer verifies the decoded invocation
+independently (never the summary) → combine → submit. Key-rotation drills are rehearsed, not
+documented and forgotten.
 
 ### 8.3 Upgrade timelock
 
 `upgrade()` is currently immediate. For a registry whose entire promise is "a revocation cannot be
-quietly reversed", the ability to swap the code with no warning is the largest single trust hole. OZ's
-Stellar library has no timelock module, so we implement one:
+quietly reversed", the ability to swap the code with no warning is the largest single trust hole.
+`stellar-governance` provides the timelock primitive, so the registry composes it rather than
+inventing one; the entry points below are the registry-side surface:
 
 ```rust
 const MIN_UPGRADE_DELAY: u64 = 7 * 24 * 60 * 60;   // POLICY: 7 days, to be confirmed
@@ -837,10 +964,49 @@ code urgently is not. Pause never blocks a takedown path.
 
 ---
 
-## 9. Credentials — W3C VC 2.0 off-chain · BUILD
+## 9. Credentials and the privacy hinge — W3C VC 2.0 off-chain · BUILD
 
 The chain holds a 32-byte anchor and a URI. The credential itself is off-chain, because a natural
 person's name and evidence must remain erasable and Stellar ledger entries are effectively permanent.
+
+### 9.0 Salted commitments — how erasure and immutability stop contradicting each other
+
+This is the design decision that resolves the open problem in [`architecture.md`](architecture.md):
+the live contract stores `role`, `department`, `scope` and `territory` as **public cleartext**, and
+those are employment data about an identified person, published permanently. GDPR Art. 17 gives that
+person a right to erasure. Both cannot hold.
+
+The resolution is a salted commitment. For every publicly displayable claim set:
+
+```text
+commitment = sha256( JCS(claim_object) || salt_32 )
+```
+
+`JCS` is RFC 8785 canonical JSON, so the bytes are reproducible by anyone. `salt_32` is a per-record
+random salt that exists **only** in the encrypted EU operational database. The chain stores the
+commitment; the verifier fetches the claim object, recomputes the commitment, and shows the reader
+that it matches the on-chain record.
+
+What this buys, in order of importance:
+
+1. **No personal data on chain.** Only 32 bytes that are meaningless without the salt.
+2. **Erasure actually works.** Destroying the record and its salt off-chain leaves an on-chain value
+   that can never again be linked to a claim, a person, or anything else. The remaining bytes are
+   not "hard to reverse" — without the salt they are unlinkable to any candidate plaintext.
+3. **The salt defeats enumeration.** An unsalted hash of `{"role":"Senior Recruiter"}` is trivially
+   rainbow-tabled — the claim space is small and highly repetitive. The salt is the difference
+   between a commitment and a lookup key, and this is exactly why the current cleartext fields could
+   *not* simply be replaced with a plain hash.
+4. **Third parties can verify independently.** Canonicalisation and commitment test vectors are
+   published alongside the schemas, so nobody has to trust our implementation to check a claim.
+
+**Migration path — honest about cost.** The live contract's cleartext fields cannot be retrofitted
+silently: existing records were written in the clear and the ledger keeps them. The plan is
+`claim_hash` fields added alongside in the next contract version, new claims written commitment-only,
+the cleartext fields frozen and then removed from the public read path, and the existing five
+demonstration entities re-issued rather than migrated. Legacy public text remains on-chain forever —
+which is precisely the argument for making this change before a founding cohort exists rather than
+after.
 
 ### 9.1 Current state, stated plainly
 
@@ -891,14 +1057,18 @@ first. Marketing must never blur these, and the UI must distinguish "hash matche
 verified".
 
 **Selective disclosure** (BBS / SD-JWT-style) is deliberately staged after the base proof suite. The
-verifier use cases that justify it — proving "employed by a licensed firm" without revealing the
-person's name — are real, but shipping an unaudited disclosure scheme is worse than shipping none.
+verifier use case that justifies it is concrete — a former employee proving role category and period
+without exposing identity documents or internal evidence — but shipping an unaudited disclosure
+scheme is worse than shipping none.
+
+**Published schemas:** Verified Person · Verified Organisation · Current Employee · Past Employee ·
+External Representative · Recruitment Mandate · General Representation Mandate. Each ships with its
+JSON Schema and its canonicalisation/commitment test vectors, so a third party can verify a
+DoubleCheck claim without running DoubleCheck code.
 
 **POLICY, not code.** Legal basis and retention schedule for the handles, addresses, timestamps and
-hashes that stay on-chain permanently; a DPIA; and a decision on whether `role`, `department`,
-`scope` and `territory` move behind `detail_hash` or into encrypted/selectively disclosed
-credentials. The contract shape does not change either way — this is a switch that must be thrown
-deliberately, with counsel, before the founding cohort.
+hashes that stay on-chain permanently, plus a DPIA. §9.0 gives the technical answer for the claim
+text; the legal basis for the residue still needs counsel before a founding cohort exists.
 
 ---
 
@@ -984,9 +1154,56 @@ Full runbook: [`deployment.md`](deployment.md).
 `revoking_the_company_invalidates_the_mandates_it_handed_out`. Each of the security properties
 claimed in this document maps to a test file, which is the point.
 
-Grant scope adds: property-based tests over the `is_authorised` scan against a reference
-implementation, a fuzz target over public text and URI validation, an upgrade-migration test fixture,
-and an end-to-end passkey + relayer test on testnet.
+Grant scope adds:
+
+- **a negative test for every privileged method** — unauthorised caller, paused contract, inactive
+  organisation, illegal status transition — so authority is asserted by exclusion, not only by the
+  happy path;
+- property-based / invariant tests over the status machines and the `is_authorised` scan, driven by
+  randomised transition sequences against a reference implementation;
+- TTL tests using `env.ledger().with_mut` to advance past expiry and assert archival and restoration
+  behaviour, including the read-path case in §5.4;
+- a fuzz target over public text and URI validation;
+- an upgrade-migration fixture, and an end-to-end passkey + relayer test on testnet;
+- coverage via `cargo-llvm-cov`, gated in CI on critical paths;
+- static analysis with the OpenZeppelin Soroban security detectors, plus `clippy -D warnings`.
+
+### 11.4 Reproducible builds and scripted deployment · BUILD
+
+A published Wasm hash proves two deployments are identical. It does not prove either matches the
+source — which is the question that actually matters for a registry claiming to be independently
+auditable. Grant scope closes that gap:
+
+- `stellar contract build` embeds the `contractmetav0` section (contract name, version, source repo,
+  home domain, build image and toolchain);
+- build-environment fields follow the [SEP-58](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md)
+  draft vocabulary, so a third party can rebuild the exact Wasm bytes from source and compare hashes
+  independently, with [SEP-55](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0055.md)
+  signed CI attestations as the complementary, cheaper check;
+- Wasm hashes are published per release and verifiable against the deployed instance;
+- deployment is a scripted, **idempotent** pipeline (`stellar contract deploy` with `__constructor`
+  arguments taken from a per-network manifest) that emits an addresses file committed to the
+  repository for testnet and mainnet.
+
+The contract already uses `__constructor` (Protocol 22+) rather than a separate `init()`, so there is
+no window in which a deployed-but-uninitialised registry can be claimed by whoever calls first.
+
+### 11.5 Open-source scope
+
+The trust layer is only credible if someone other than us can run it. Under MIT/Apache-2.0: the
+registries, governance modules, contract tests, event schemas, W3C credential schemas and test
+vectors, the TypeScript SDK, the reference indexer and reconciler, verifier components, the dynamic
+badge, passkey onboarding components, an example company integration, and the deployment and security
+documentation.
+
+Private to the steward's operations: KYC/KYB provider accounts and credentials, identity and company
+verification documents, internal risk policies, investigation notes, commercial dashboards and case
+management. That split is the same line as §10 — the boundary between a verification *decision* and
+the evidence behind it.
+
+**Acceptance criterion, not aspiration:** a second operator must be able to reproduce a full test
+deployment from the public documentation alone. This is how "multi-issuer by design" gets tested
+rather than asserted, and it is a gate on the final milestone.
 
 ---
 
@@ -1002,9 +1219,17 @@ and an end-to-end passkey + relayer test on testnet.
 | Revocation ignored by a cached UI | no frozen "verified" artefacts — QR, embed and share links all re-read live state; `ClaimStatusSet` is the invalidation feed | LIVE |
 | Newer bogus mandate masks a revoked one | newest-to-oldest scan that skips ineligible records, not first-match-wins | LIVE |
 | Index griefing (fill a person's index to block attestations) | index cap is non-fatal for discovery; strict path uses a separate 64-entry confirmed-pair index that prunes and fails closed | LIVE |
-| Record archived, badge unreadable | keeper + TTL monitoring + `RestoreFootprint` path | LIVE / BUILD |
+| Record archived, badge unreadable | keeper + minimum-TTL metric; CAP-0066 auto-restore covers writes, operator-submitted restore covers the wallet-free read path (§5.4) | LIVE / BUILD |
 | Relayer tampering with a sponsored write | auth entry signs the full invocation tree + nonce + expiry; relayer can only refuse or delay | BUILD |
+| Signature replay across accounts | `SOROBAN_CREDENTIALS_ADDRESS_V2` address-bound payload (CAP-0071-02) | BUILD |
 | Session token theft on the console | SEP-10/45 JWT grants console access only; every chain write needs its own Soroban signature | BUILD |
+| Fake company onboarded | KYB, domain-control proof, review of the signatory's actual authority, published issuer policy | POLICY |
+| Issuer signing key compromised | KMS/HSM custody, 2-of-3 on governance, rotation drills, emergency pause | BUILD |
+| Company admin device compromised | passkeys + `stellar-accounts` policies; 2-of-3 required for admin changes and key rotation; alerting on sensitive actions | BUILD |
+| Evidence store breached | encryption at rest, restricted store, data minimisation, short retention, access logging | BUILD |
+| Static badge screenshot passed off as current | badge colour is a function of a live response; no frozen artefacts exist to copy | LIVE |
+| Malicious or coerced upgrade | 2-of-3 + timelock + publicly readable `pending_upgrade` + published hash + reproducible build | BUILD |
+| Indexer diverges from chain | continuous reconciliation, drift alerts, stale-marking, and a deliberate-drift test proving the alarm fires | BUILD |
 | Homograph / control-character spoofing in public text | handle charset restriction, reserved product routes, control-character rejection (`Error::InvalidText`) | LIVE |
 | RPC endpoint lies to a reader | contract id and network are public; any independent RPC returns the same state; the API labels indexed vs chain-read results | LIVE |
 
@@ -1019,14 +1244,14 @@ compromised device passkey with a full-scope signer can act as the holder until 
 | # | Deliverable | Substance | Evidence at completion |
 |---|---|---|---|
 | 1 | Passkey onboarding | Passkey Kit integration, `C…` controllers end-to-end, multi-passkey + ed25519 recovery, policy-signer scoping | testnet demo: badge accepted from a phone with no wallet install |
-| 2 | Sponsored submission | Launchtube path + self-hosted relayer fallback, per-subject rate limits, allowlisted invocation trees, balance alerting | holder write with zero XLM; documented refuse/delay-only failure modes |
+| 2 | Sponsored submission | Launchtube path + self-hosted OpenZeppelin Relayer fallback, per-organisation and per-subject rate limits, allowlisted invocation trees, resource-fee audit log, balance alerting | holder write with zero XLM; documented refuse/delay-only failure modes |
 | 3 | Wallets Kit console | `@creit-tech/stellar-wallets-kit` replacing the Freighter-only path (Freighter + xBull focus); issuer/arbiter consoles with plain-language statement review and final-ledger confirmation | full issuer lifecycle driven from the browser |
-| 4 | Governance hardening | OZ `stellar-access` / `stellar-contract-utils` migration, named roles, 2-of-3 admin custody, upgrade timelock with public `pending_upgrade` | upgraded contract + separation-of-duties runbook + signing ceremony doc |
-| 5 | Indexer, reconciler, API | `getEvents` ingestor, Postgres projections, status history, divergence alerting, staleness labelling | full-registry browse with no linear scan; reconciler report |
-| 6 | TTL service | scheduled `keepalive` to `done`, per-entry TTL monitoring, auto-`RestoreFootprint`, rent metrics | dashboard + a restored-entry demonstration |
-| 7 | Credential layer | VC 2.0 issuance, `did:web` issuer + `did:pkh` subject, Data Integrity proof verification in-browser, status list cross-checked against chain | verifier distinguishing "hash matches" from "proof verified" |
+| 4 | Governance hardening | migration to OZ `stellar-access` / `stellar-contract-utils` / `stellar-governance` / `stellar-accounts`; two role planes; 2-of-3 custody; timelocked upgrade with public `pending_upgrade`; Protocol 27 delegated multi-signer approval | upgraded contract + separation-of-duties runbook + signing-ceremony doc |
+| 5 | Indexer, reconciler, API | `getEvents` live path **plus** Galexie/ingest-SDK backfill, idempotent `(ledger_seq, tx_index, event_index)` ingestion, Postgres projections, status history, drift alerting, staleness labelling | full-registry browse with no linear scan; deliberate-drift test passing |
+| 6 | TTL service | scheduled `keepalive` to `done`, per-entry TTL monitoring, minimum-TTL-across-estate metric, operator-submitted restores for the wallet-free read path, rent metrics | dashboard + a restored-entry demonstration |
+| 7 | Credential and commitment layer | salted commitments (§9.0) with published canonicalisation test vectors; VC 2.0 issuance, `did:web` issuer + `did:pkh` subject, Data Integrity proof verification in-browser, status list cross-checked against chain | verifier distinguishing "hash matches" from "proof verified"; no new cleartext personal data on chain |
 | 8 | SEP-10 + SEP-45 auth | both flows, `stellar.toml` publication, short-lived JWTs, isolated SEP-45 module pending spec finalisation | authenticated console session from both a `G…` and a `C…` account |
-| 9 | Audit and mainnet gate | independent Soroban + frontend audit, findings resolved, DPIA and policy set published | audit report + resolved findings + mainnet deployment record |
+| 9 | Audit, reproducibility and mainnet gate | independent Soroban + frontend audit with findings resolved; SEP-58 reproducible build published; DPIA and policy set published; second-operator deployment reproduced from public docs | audit report + rebuilt-hash match + independent test deployment + mainnet record |
 
 Milestones 1–3 are the adoption unlock, 4–6 are the operations unlock, 7–9 are the mainnet gate. They
 are independently shippable and each ends in something checkable on a public network.
@@ -1037,9 +1262,11 @@ are independently shippable and each ends in something checkable on a public net
 
 These are deliberately listed rather than papered over. Each is a decision, not an unknown.
 
-1. **Free-text employment fields on-chain.** `role`, `department`, `scope`, `territory` are public,
-   permanent, and are employment data about an identified person. Move behind `detail_hash`, or keep
-   for readability? Needs counsel before the founding cohort; no contract reshape either way.
+1. **When to cut over to salted commitments.** §9.0 settles *what* to do about the cleartext `role`,
+   `department`, `scope` and `territory` fields; what remains is timing. Cutting over costs a
+   contract version and re-issuance of the demonstration records, and the legacy cleartext stays on
+   the ledger regardless — so the only cheap moment is before a founding cohort exists. The
+   recommendation is to do it in the next contract version rather than after mainnet.
 2. **Timelock duration.** 7 days balances warning against incident response. 48 hours is defensible
    for a pre-audit testnet; 7 days is the target for mainnet.
 3. **Sponsorship economics.** Who pays holder writes at scale, and what the per-subject cap is before
@@ -1059,7 +1286,10 @@ These are deliberately listed rather than papered over. Each is a decision, not 
 [Authorization](https://developers.stellar.org/docs/learn/fundamentals/contract-development/authorization) ·
 [State archival](https://developers.stellar.org/docs/learn/fundamentals/contract-development/storage/state-archival) ·
 [Events](https://developers.stellar.org/docs/learn/fundamentals/contract-development/events) ·
-[Protocol 21 / secp256r1](https://stellar.org/blog/developers/protocol-21-is-live-on-stellar-mainnet)
+[Protocol 21 / secp256r1](https://stellar.org/blog/developers/protocol-21-is-live-on-stellar-mainnet) ·
+[Protocol 27 "Zipper" upgrade guide](https://stellar.org/blog/foundation-news/stellar-zipper-protocol-27-upgrade-guide) ·
+[Galexie full-history exporting](https://developers.stellar.org/docs/data/indexers/build-your-own/galexie/admin_guide/full-history-exporting) ·
+[Ingest SDK](https://developers.stellar.org/docs/data/indexers/build-your-own/ingest-sdk)
 
 **Tooling** — [Scaffold Stellar](https://developers.stellar.org/docs/tools/scaffold-stellar) ·
 [Stellar Wallets Kit](https://stellarwalletskit.dev/) ·
@@ -1071,6 +1301,11 @@ These are deliberately listed rather than papered over. Each is a decision, not 
 **Standards** — [SEP-10](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0010.md) ·
 [SEP-45 (Draft)](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0045.md) ·
 [CAP-0046-11 Soroban authorization](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0046-11.md) ·
+[CAP-0071 auth delegation and address-bound credentials](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0071.md) ·
+[CAP-0066 in-memory state and auto-restore](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0066.md) ·
+[SEP-55 build attestations](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0055.md) ·
+[SEP-58 reproducible builds](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0058.md) ·
+[RFC 8785 JSON Canonicalization](https://www.rfc-editor.org/rfc/rfc8785) ·
 [W3C VC Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/) ·
 [W3C VC Data Integrity](https://www.w3.org/TR/vc-data-integrity/) ·
 [did:web](https://w3c-ccg.github.io/did-method-web/) ·
