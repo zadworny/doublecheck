@@ -1,8 +1,8 @@
 # SCF tranche deliverables
 
-## Tranche 1
+Deliverable roadmap submitted to the Stellar Community Fund. Total across all tranches: $96,000.
 
-Tranche 1 (Deliverable Roadmap) - MVP
+## Tranche 1 (Deliverable Roadmap) - MVP
 
 Context: DoubleCheck's registry contract and public verifier are already live on Stellar testnet. This tranche adds accessible account control and complete browser-based issuer workflows. It does not rebuild the registry.
 
@@ -40,9 +40,7 @@ Estimated date of completion: 15 October 2026
 
 Budget: $10,200
 
-## Tranche 2
-
-Tranche 2 (Deliverable Roadmap) - Testnet
+## Tranche 2 (Deliverable Roadmap) - Testnet
 
 ### Deliverable 1 - Contract governance, registry indexer, public API and SDK
 
@@ -50,7 +48,7 @@ Brief description:
 
 Upgrade the testnet registry using established Stellar contract components, e.g., OpenZeppelin modules for role-based access control, pausing, upgradeability, and timelocked governance. Separate protocol administrator, arbiter, pauser, and upgrade authorities from organization-scoped permissions. Sensitive upgrades will require authorization from a 2-of-3 Stellar account and remain publicly visible during a ledger-based timelock.
 
-Build a registry event indexer that consumes DoubleCheck contract events through Stellar RPC, persists its cursor, and retains an append-only event log for backup and replay. The indexer schema will be designed from the outset to support salted commitments and off-chain credential resolution. Existing testnet state will be bootstrapped through direct contract reads. On mainnet, indexing will begin from the deployment ledger, providing complete event history from launch.
+Build a registry event indexer that consumes DoubleCheck contract events through Stellar RPC, persists its cursor, and retains an append-only event log for backup and replay. Existing testnet state will be bootstrapped through direct contract reads. On mainnet, indexing will begin from the deployment ledger, providing complete event history from launch.
 
 A reconciler will compare indexed projections with authoritative contract state, mark divergent records as stale, and prevent stale data from producing a positive authorization result. Expose entity, relationship, mandate, and status-history queries through a documented public API and TypeScript SDK.
 
@@ -106,9 +104,7 @@ Estimated date of completion: 16 December 2026
 
 Budget: $9,700
 
-## Tranche 3
-
-Tranche 3 (Deliverable Roadmap) - Mainnet
+## Tranche 3 (Deliverable Roadmap) - Mainnet
 
 ### Deliverable 1 - Production hardening, custody, and operational readiness
 
@@ -116,15 +112,15 @@ Brief description:
 
 Prepare the reviewed release candidate and production environment for mainnet. Configure separately controlled keys for upgrade, issuer, arbiter, pauser, relayer, and keeper operations, with 2-of-3 custody for upgrades. Harden production secrets, add configurable RPC and relayer providers, and implement monitoring for service health, ledger progress, reconciler drift, failed submissions, operational balances, and TTL durability.
 
-Complete incident-response, recovery, key-rotation, deployment, and rollback runbooks. Run static analysis, dependency-security checks, integration tests, and failure-path tests across the contracts and supporting services. Implement remediation of findings from the security review completed between Tranche 2 and Tranche 3.
+Complete incident-response, recovery, key-rotation, deployment, and rollback runbooks. Run static analysis, dependency-security checks, integration tests, and failure-path tests across the contracts and supporting services.
 
 How to measure completion:
 
 Production-equivalent testnet exercises cover multisignature approval, signer rotation, upgrade scheduling and cancellation, rejection of early upgrade execution, emergency pause and recovery, relayer failure, RPC provider failure, index reconstruction, and archived-entry restoration.
 
-Monitoring alerts are demonstrated for projection drift, failed submissions, low operational balances, and low TTL headroom. Deployment configuration is version-controlled without storing production secrets in the repository. All critical and high-severity findings from the security review are resolved, regression-tested, and documented in a public triage report.
+Monitoring alerts are demonstrated for projection drift, failed submissions, low operational balances, and low TTL headroom. Deployment configuration is version-controlled without storing production secrets in the repository. The release candidate, build artifacts, test results, and technical documentation are delivered for the SCF-provided security review. Audit-provider costs are excluded from this budget.
 
-Estimated date of completion: 5 January 2027
+Estimated date of completion: 3 January 2027
 
 Budget: $13,600
 
@@ -146,7 +142,7 @@ Estimated date of completion: 15 January 2027
 
 Budget: $11,500
 
-### Deliverable 3 - Mainnet launch and user acceptance testing
+### Deliverable 3 - Mainnet launch and professional user testing
 
 Brief description:
 
@@ -154,7 +150,7 @@ Deploy the reviewed DoubleCheck release to Stellar mainnet and activate the prod
 
 Jobited will operate as the first production verification issuer under a published issuer policy. A technical onboarding package will be available for participating pilot organizations, but completion will not depend on any partner's participation or adoption result.
 
-Complete comprehensive user acceptance testing across issuer administration, passkey-controlled subject flows, and wallet-free public verification. Address launch-blocking security and usability findings. Document essential production data-handling, retention, deletion, correction, and dispute procedures for off-chain information.
+Complete SCF-provided professional user testing across issuer administration, passkey-controlled subject flows, and wallet-free public verification. Address launch-blocking security and usability findings. Document essential production data-handling, retention, deletion, correction, and dispute procedures for off-chain information.
 
 How to measure completion:
 
@@ -162,7 +158,7 @@ The mainnet contract address, deployment transactions, tagged source code, deplo
 
 A recorded mainnet demonstration using controlled records completes entity acceptance, administrator enrollment, relationship publication, subject consent, mandate issuance, credential verification, withdrawal, and the resulting change in public verification status. The verifier distinguishes current representation from past representation and clearly states when a former representative has no current authority. Public verification requires no wallet, login, or XLM.
 
-Jobited completes the production issuer workflow. The stable mainnet application, user guides, and end-to-end verification walkthrough are finalized. Usability or security findings designated as launch blockers are resolved and regression-tested. No tester score, partner activity, adoption target, or external operator action is required for completion. This is the final project deliverable.
+Jobited completes the production issuer workflow. The stable mainnet application and testing instructions are supplied for SCF's professional user testing. Security or usability findings designated as launch blockers are resolved and regression-tested. No tester score, partner activity, adoption target, or external operator action is required for completion. This is the final project deliverable.
 
 Estimated date of completion: 3 February 2027
 
