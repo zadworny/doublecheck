@@ -1,10 +1,10 @@
 # SCF tranche deliverables
 
-## Tranche 1
+Deliverable roadmap submitted to the Stellar Community Fund. Total across all tranches: $96,000.
 
-Tranche 1 (Deliverable Roadmap) - MVP
+## Tranche 1 (Deliverable Roadmap) - MVP
 
-Context: DoubleCheck's registry contract and public verifier are already live on Stellar testnet. This tranche adds accessible account control and complete browser-based issuer workflows. It does not rebuild the registry.
+Context: DoubleCheck's registry contract and public verifier are already live on Stellar testnet. This tranche adds accessible account control and the listed browser-based issuer workflows. It does not rebuild the registry.
 
 ### Deliverable 1 - Passkey accounts and sponsored Soroban transactions
 
@@ -28,21 +28,19 @@ Budget: $11,400
 
 Brief description:
 
-Integrate a unified Stellar wallet connection layer, e.g., Stellar Wallets Kit, into the issuer and organization administrator console, supporting Freighter. The console will execute the complete DoubleCheck lifecycle against the deployed Soroban contract: entity proposal and acceptance, relationship attestation, subject-approved publication, mandate issuance and withdrawal, and public verification through Soroban RPC.
+Integrate a unified Stellar wallet connection layer, e.g., Stellar Wallets Kit, into the issuer and organization administrator console, supporting a maintained wallet such as Freighter. The console will execute the listed DoubleCheck lifecycle against the deployed Soroban contract: entity proposal and acceptance, relationship attestation, subject-approved publication, mandate issuance and withdrawal, and public verification through Soroban RPC.
 
 How to measure completion:
 
 A recorded public testnet demonstration completes the lifecycle from entity proposal through relationship and mandate withdrawal. An unauthorized account fails to issue an attestation. Supported wallet connection and transaction-signing paths are documented and tested.
 
-Before signing, every write displays the contract action and arguments in plain language. The console simulates, signs, submits, and confirms final ledger inclusion. The public verifier reads contract state directly through Soroban RPC and reflects withdrawal or expiry without relying on a DoubleCheck database or requiring a separate status-synchronization transaction.
+Before signing, every listed write displays the contract action and arguments in plain language. The console simulates, signs, submits, and confirms final ledger inclusion. The public verifier reads contract state directly through Soroban RPC and reflects withdrawal or expiry without relying on a DoubleCheck database or requiring a separate status-synchronization transaction.
 
 Estimated date of completion: 15 October 2026
 
 Budget: $10,200
 
-## Tranche 2
-
-Tranche 2 (Deliverable Roadmap) - Testnet
+## Tranche 2 (Deliverable Roadmap) - Testnet
 
 ### Deliverable 1 - Contract governance, registry indexer, public API and SDK
 
@@ -106,9 +104,7 @@ Estimated date of completion: 16 December 2026
 
 Budget: $9,700
 
-## Tranche 3
-
-Tranche 3 (Deliverable Roadmap) - Mainnet
+## Tranche 3 (Deliverable Roadmap) - Mainnet
 
 ### Deliverable 1 - Production hardening, custody, and operational readiness
 
@@ -122,7 +118,7 @@ How to measure completion:
 
 Production-equivalent testnet exercises cover multisignature approval, signer rotation, upgrade authorization and recovery, emergency pause and recovery, relayer failure, RPC provider failure, index reconstruction, and archived-entry restoration.
 
-Monitoring alerts are demonstrated for projection drift, failed submissions, low operational balances, and low TTL headroom. Deployment configuration is version-controlled without storing production secrets in the repository. All critical and high-severity findings received before the mainnet release freeze are resolved, regression-tested, and documented.
+Monitoring alerts are demonstrated for projection drift, failed submissions, low operational balances, and low TTL headroom. Deployment configuration is version-controlled without storing production secrets in the repository. All critical, high, and medium-severity findings received before the mainnet release freeze are resolved, regression-tested, and documented.
 
 Estimated date of completion: 5 January 2027
 
@@ -154,13 +150,13 @@ Deploy the tagged DoubleCheck release to Stellar mainnet and activate the produc
 
 Jobited will operate as the first production verification issuer under a published issuer policy. A technical onboarding package will be available for participating pilot organizations, but completion will not depend on any partner's participation or adoption result.
 
-Complete comprehensive user acceptance testing across issuer administration, passkey-controlled subject flows, and wallet-free public verification. Address launch-blocking security and usability findings. Document essential production data-handling, retention, deletion, correction, and dispute procedures for off-chain information.
+Complete documented user acceptance testing across issuer administration, passkey-controlled subject flows, and wallet-free public verification. Address launch-blocking security and usability findings. Document essential production data-handling, retention, deletion, correction, and dispute procedures for off-chain information.
 
 How to measure completion:
 
 The mainnet contract address, deployment transactions, tagged source code, deployed WASM hash, build manifest, network configuration, and governance configuration are published. The deployed WASM matches the tagged v1.0 release artifact. All production components use the published mainnet deployment, and operational monitoring and the funded TTL keeper are active.
 
-A recorded mainnet demonstration using controlled records completes entity acceptance, relationship publication, subject consent, mandate issuance, credential verification, withdrawal, and the resulting change in public verification status. The verifier distinguishes current representation from past representation and clearly states when a former representative has no current authority. Public verification requires no wallet, login, or XLM.
+A recorded mainnet demonstration using controlled records completes entity acceptance, administrator enrollment, relationship publication, subject consent, mandate issuance, credential verification, withdrawal, and the resulting change in public verification status. The verifier distinguishes current representation from past representation and clearly states when a former representative has no current authority. Public verification requires no wallet, login, or XLM.
 
 Jobited completes the production issuer workflow. The stable mainnet application, user guides, and end-to-end verification walkthrough are finalized. Usability or security findings designated as launch blockers are resolved and regression-tested. No tester score, partner activity, adoption target, or external operator action is required for completion. This is the final project deliverable.
 
