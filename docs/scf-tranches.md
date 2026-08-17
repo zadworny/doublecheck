@@ -4,15 +4,15 @@ Deliverable roadmap submitted to the Stellar Community Fund. Total across all tr
 
 ## Tranche 1 (Deliverable Roadmap) - MVP
 
-Context: DoubleCheck's registry contract and public verifier are already live on Stellar testnet. This tranche adds accessible account control and complete browser-based issuer workflows. It does not rebuild the registry.
+Context: DoubleCheck's registry contract and public verifier are already live on Stellar testnet. This tranche adds accessible account control and the listed browser-based issuer workflows. It does not rebuild the registry.
 
 ### Deliverable 1 - Passkey accounts and sponsored Soroban transactions
 
 Brief description:
 
-Integrate maintained Stellar passkey smart-account tooling, e.g., Passkey Kit, behind an internal adapter so the implementation can be replaced if upstream tooling changes. Individuals will control their DoubleCheck identity through a passkey-controlled Soroban account using native secp256r1 verification.
+Integrate maintained Stellar passkey smart-account tooling, e.g., OpenZeppelin Smart Account Kit, behind an internal adapter so the implementation can be replaced if upstream tooling changes. Individuals will control their DoubleCheck identity through a passkey-controlled Soroban account using native secp256r1 verification.
 
-Add sponsored transaction submission through a Stellar relayer, e.g., OpenZeppelin Relayer with Channels. Users will be able to accept entity proposals and manage publication consent without installing a wallet, managing a seed phrase, or holding XLM. Sponsored submission will be limited to contract calls authorized by the user.
+Add sponsored transaction submission through a Stellar relayer, e.g., OpenZeppelin Relayer. Users will be able to accept entity proposals and manage publication consent without installing a wallet, managing a seed phrase, or holding XLM. Sponsored submission will be limited to contract calls authorized by the user.
 
 How to measure completion:
 
@@ -28,13 +28,13 @@ Budget: $11,400
 
 Brief description:
 
-Integrate a unified Stellar wallet connection layer, e.g., Stellar Wallets Kit, into the issuer and organization administrator console, supporting wallets such as Freighter and xBull. The console will execute the complete DoubleCheck lifecycle against the deployed Soroban contract: entity proposal and acceptance, administrator enrollment, relationship attestation, subject-approved publication, mandate issuance and withdrawal, and public verification through Soroban RPC.
+Integrate a unified Stellar wallet connection layer, e.g., Stellar Wallets Kit, into the issuer and organization administrator console, supporting a maintained wallet such as Freighter. The console will execute the listed DoubleCheck lifecycle against the deployed Soroban contract: entity proposal and acceptance, relationship attestation, subject-approved publication, mandate issuance and withdrawal, and public verification through Soroban RPC.
 
 How to measure completion:
 
 A recorded public testnet demonstration completes the lifecycle from entity proposal through relationship and mandate withdrawal. An unauthorized account fails to issue an attestation. Supported wallet connection and transaction-signing paths are documented and tested.
 
-Before signing, every write displays the contract action and arguments in plain language. The console simulates, signs, submits, and confirms final ledger inclusion. The public verifier reads contract state directly through Soroban RPC and reflects withdrawal or expiry without relying on a DoubleCheck database or requiring a separate status-synchronization transaction.
+Before signing, every listed write displays the contract action and arguments in plain language. The console simulates, signs, submits, and confirms final ledger inclusion. The public verifier reads contract state directly through Soroban RPC and reflects withdrawal or expiry without relying on a DoubleCheck database or requiring a separate status-synchronization transaction.
 
 Estimated date of completion: 15 October 2026
 
@@ -46,15 +46,15 @@ Budget: $10,200
 
 Brief description:
 
-Upgrade the testnet registry using established Stellar contract components, e.g., OpenZeppelin modules for role-based access control, pausing, upgradeability, and timelocked governance. Separate protocol administrator, arbiter, pauser, and upgrade authorities from organization-scoped permissions. Sensitive upgrades will require authorization from a 2-of-3 Stellar account and remain publicly visible during a ledger-based timelock.
+Upgrade the testnet registry using established Stellar contract components, e.g., OpenZeppelin modules for role-based access control, pausing, and upgradeability. Separate protocol administrator, arbiter, pauser, and upgrade authorities from organization-scoped permissions. Sensitive upgrades will require authorization from a 2-of-3 Stellar account and emit a public upgrade event.
 
-Build a registry event indexer that consumes DoubleCheck contract events through Stellar RPC, persists its cursor, and retains an append-only event log for backup and replay. Existing testnet state will be bootstrapped through direct contract reads. On mainnet, indexing will begin from the deployment ledger, providing complete event history from launch.
+Build a registry event indexer that consumes DoubleCheck contract events through Stellar RPC, persists its cursor, and retains an append-only event log for backup and replay. The indexer schema will be designed from the outset to support salted commitments and off-chain credential resolution. Existing testnet state will be bootstrapped through direct contract reads. On mainnet, indexing will begin from the deployment ledger, providing complete event history from launch.
 
 A reconciler will compare indexed projections with authoritative contract state, mark divergent records as stale, and prevent stale data from producing a positive authorization result. Expose entity, relationship, mandate, and status-history queries through a documented public API and TypeScript SDK.
 
 How to measure completion:
 
-The upgraded contract is live on testnet, with tagged source code, contract address, WASM hash, and upgrade transaction published. Existing records remain readable. Automated tests demonstrate role separation, multisignature approval for sensitive actions, rejection of unauthorized calls, emergency pause behavior, continued withdrawal and revocation while new issuance is paused, visibility of queued upgrades, and rejection of execution before the timelock expires.
+The upgraded contract is live on testnet, with tagged source code, contract address, WASM hash, and upgrade transaction published. Existing records remain readable. Automated tests demonstrate role separation, multisignature approval for sensitive actions, rejection of unauthorized calls, emergency pause behavior, continued withdrawal and revocation while new issuance is paused, and publication of upgrade events.
 
 Starting from the bootstrap snapshot and retained event log, the indexer rebuilds its projections and produces the same current state as direct contract reads. Restart and replay tests produce no gaps or duplicate events. A deliberately modified projection is detected and marked stale.
 
@@ -64,19 +64,19 @@ Estimated date of completion: 7 November 2026
 
 Budget: $14,500
 
-### Deliverable 2 - Soroban TTL keeper and restoration service
+### Deliverable 2 - Soroban TTL keeper and restoration workflow
 
 Brief description:
 
 Implement the operational layer required by Soroban state archival. An off-chain keeper will monitor the registry contract code, contract instance, and tracked persistent entries, then submit permissionless TTL-extension transactions before archival.
 
-When an archived persistent or instance entry is required for public verification, an operator-funded service will submit the required restoration transaction and retry the verification request. Readers will not need a wallet or XLM.
+When an archived persistent or instance entry is detected, an operator-funded restoration workflow will submit the required restoration transaction. Readers will not need a wallet or XLM.
 
 How to measure completion:
 
 A recorded public testnet demonstration shows the keeper identifying entries within its configured extension window and submitting a successful TTL-extension transaction. Transaction IDs, outcomes, the latest completed run, failed submissions, and minimum remaining TTL are visible through operational monitoring.
 
-A reproducible integration test in a controlled Stellar environment advances a persistent record beyond its TTL, restores it through the same operator-funded restoration path used by the service, and verifies it again without requiring the reader to connect a wallet or hold XLM. Tests cover interrupted runs, repeated execution, and failed submissions. The keeper receives no privileged registry role.
+A reproducible integration test in a controlled Stellar environment advances a persistent record beyond its TTL, restores it through the same operator-funded restoration workflow, and verifies it again without requiring the reader to connect a wallet or hold XLM. Tests cover interrupted runs, repeated execution, and failed submissions. The keeper receives no privileged registry role.
 
 Estimated date of completion: 27 November 2026
 
@@ -110,17 +110,17 @@ Budget: $9,700
 
 Brief description:
 
-Prepare the reviewed release candidate and production environment for mainnet. Configure separately controlled keys for upgrade, issuer, arbiter, pauser, relayer, and keeper operations, with 2-of-3 custody for upgrades. Harden production secrets, add configurable RPC and relayer providers, and implement monitoring for service health, ledger progress, reconciler drift, failed submissions, operational balances, and TTL durability.
+Prepare the production release candidate and production environment for mainnet. Configure separately controlled keys for upgrade, issuer, arbiter, pauser, relayer, and keeper operations, with 2-of-3 custody for upgrades. Harden production secrets, add configurable RPC and relayer providers, and implement monitoring for service health, ledger progress, reconciler drift, failed submissions, operational balances, and TTL durability.
 
-Complete incident-response, recovery, key-rotation, deployment, and rollback runbooks. Run static analysis, dependency-security checks, integration tests, and failure-path tests across the contracts and supporting services.
+Complete incident-response, recovery, key-rotation, deployment, and rollback runbooks. Run static analysis, dependency-security checks, integration tests, and failure-path tests across the contracts and supporting services. Implement remediation of findings received from the security review initiated after Tranche 2.
 
 How to measure completion:
 
-Production-equivalent testnet exercises cover multisignature approval, signer rotation, upgrade scheduling and cancellation, rejection of early upgrade execution, emergency pause and recovery, relayer failure, RPC provider failure, index reconstruction, and archived-entry restoration.
+Production-equivalent testnet exercises cover multisignature approval, signer rotation, upgrade authorization and recovery, emergency pause and recovery, relayer failure, RPC provider failure, index reconstruction, and archived-entry restoration.
 
-Monitoring alerts are demonstrated for projection drift, failed submissions, low operational balances, and low TTL headroom. Deployment configuration is version-controlled without storing production secrets in the repository. The release candidate, build artifacts, test results, and technical documentation are delivered for the SCF-provided security review. Audit-provider costs are excluded from this budget.
+Monitoring alerts are demonstrated for projection drift, failed submissions, low operational balances, and low TTL headroom. Deployment configuration is version-controlled without storing production secrets in the repository. All critical, high, and medium-severity findings received before the mainnet release freeze are resolved, regression-tested, and documented.
 
-Estimated date of completion: 3 January 2027
+Estimated date of completion: 5 January 2027
 
 Budget: $13,600
 
@@ -142,23 +142,23 @@ Estimated date of completion: 15 January 2027
 
 Budget: $11,500
 
-### Deliverable 3 - Mainnet launch and professional user testing
+### Deliverable 3 - Mainnet launch and user acceptance testing
 
 Brief description:
 
-Deploy the reviewed DoubleCheck release to Stellar mainnet and activate the production registry, passkey onboarding, sponsored submission, issuer console, public verifier, registry indexer, TTL service, public API, TypeScript SDK, credential service, and embeddable badge.
+Deploy the tagged DoubleCheck release to Stellar mainnet and activate the production registry, passkey onboarding, sponsored submission, issuer console, public verifier, registry indexer, TTL service, public API, TypeScript SDK, credential service, and embeddable badge.
 
 Jobited will operate as the first production verification issuer under a published issuer policy. A technical onboarding package will be available for participating pilot organizations, but completion will not depend on any partner's participation or adoption result.
 
-Complete SCF-provided professional user testing across issuer administration, passkey-controlled subject flows, and wallet-free public verification. Address launch-blocking security and usability findings. Document essential production data-handling, retention, deletion, correction, and dispute procedures for off-chain information.
+Complete documented user acceptance testing across issuer administration, passkey-controlled subject flows, and wallet-free public verification. Address launch-blocking security and usability findings. Document essential production data-handling, retention, deletion, correction, and dispute procedures for off-chain information.
 
 How to measure completion:
 
-The mainnet contract address, deployment transactions, tagged source code, deployed WASM hash, build manifest, network configuration, and governance configuration are published. The deployed WASM matches the reviewed release artifact. All production components use the published mainnet deployment, and operational monitoring and the funded TTL keeper are active.
+The mainnet contract address, deployment transactions, tagged source code, deployed WASM hash, build manifest, network configuration, and governance configuration are published. The deployed WASM matches the tagged v1.0 release artifact. All production components use the published mainnet deployment, and operational monitoring and the funded TTL keeper are active.
 
 A recorded mainnet demonstration using controlled records completes entity acceptance, administrator enrollment, relationship publication, subject consent, mandate issuance, credential verification, withdrawal, and the resulting change in public verification status. The verifier distinguishes current representation from past representation and clearly states when a former representative has no current authority. Public verification requires no wallet, login, or XLM.
 
-Jobited completes the production issuer workflow. The stable mainnet application and testing instructions are supplied for SCF's professional user testing. Security or usability findings designated as launch blockers are resolved and regression-tested. No tester score, partner activity, adoption target, or external operator action is required for completion. This is the final project deliverable.
+Jobited completes the production issuer workflow. The stable mainnet application, user guides, and end-to-end verification walkthrough are finalized. Usability or security findings designated as launch blockers are resolved and regression-tested. No tester score, partner activity, adoption target, or external operator action is required for completion. This is the final project deliverable.
 
 Estimated date of completion: 3 February 2027
 
